@@ -171,6 +171,26 @@ class Creature:
         if move_vector[0] == 0 and move_vector[1] == 0:
             move_vector = [random.uniform(-1, 1), random.uniform(-1, 1)]
 
+        # In Creature class, update the move method - modify the food stockpile behavior
+        # Replace the previous well-fed behavior with this:
+        if self.hunger >= 90 and nearby_entities:  # If well fed, help organize food storage
+            dead_creatures = [e for e in nearby_entities 
+                             if isinstance(e, Creature) and e.dead and e.food_value > 0]
+            if dead_creatures:
+                # Find the center of the largest nearby food cluster
+                cluster_x = sum(d.x for d in dead_creatures) / len(dead_creatures)
+                cluster_y = sum(d.y for d in dead_creatures) / len(dead_creatures)
+                
+                # If we're next to a dead creature, try to move it towards the cluster
+                for dead in dead_creatures:
+                    if abs(dead.x - self.x) <= 1 and abs(dead.y - self.y) <= 1:
+                        dx = cluster_x - dead.x
+                        dy = cluster_y - dead.y
+                        dist = max(1, (dx*dx + dy*dy)**0.5)
+                        move_vector[0] += dx / dist * 3  # Strong attraction to cluster
+                        move_vector[1] += dy / dist * 3
+                        break  # Only try to move one body at a time
+
         # Normalize and apply movement
         magnitude = max(1, (move_vector[0]**2 + move_vector[1]**2)**0.5)
         new_x = self.x + round(move_vector[0] / magnitude)
@@ -296,9 +316,9 @@ Has Egg: {'Yes' if self.egg else 'No'}"""
         """Consume some food from a dead creature"""
         if not self.dead and food_source.dead and food_source.food_value > 0:
             self.eating = True
-            food_amount = min(20, food_source.food_value)  # Take up to 20 food value per tick
+            food_amount = min(40, food_source.food_value)  # Increased from 20 to 40
             food_source.food_value -= food_amount
-            self.hunger = min(100, self.hunger + food_amount)
+            self.hunger = min(100, self.hunger + food_amount * 1.5)  # Increased food efficiency
             return True
         return False
 
@@ -416,6 +436,27 @@ class Environment:
         
         # Create all shapes in the batch
         shapes = []
+        
+        # Draw eggs first (so they appear under creatures)
+        for egg in self.eggs:
+            if egg.selected:
+                shapes.append(pyglet.shapes.Circle(
+                    egg.x * GRID_SIZE + GRID_SIZE // 2,
+                    egg.y * GRID_SIZE + GRID_SIZE // 2,
+                    (GRID_SIZE // 3) + 2,  # Just slightly larger than egg size
+                    color=(255, 255, 255),  # White selection circle
+                    batch=batch
+                ))
+            
+            shapes.append(pyglet.shapes.Circle(
+                egg.x * GRID_SIZE + GRID_SIZE // 2,
+                egg.y * GRID_SIZE + GRID_SIZE // 2,
+                GRID_SIZE // 3,  # Egg size stays the same
+                color=(255, 200, 0),  # Golden/yellow color for eggs
+                batch=batch
+            ))
+        
+        # Draw creatures (existing code)
         for creature in self.creatures:
             if creature.eating:
                 shapes.append(pyglet.shapes.Circle(
