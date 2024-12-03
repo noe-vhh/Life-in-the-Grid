@@ -10,6 +10,34 @@ FPS = 1  # Initial FPS
 MIN_FPS = 1
 MAX_FPS = 60
 
+# Create a simple rectangle class for panel sections
+class Panel:
+    def __init__(self, x, y, width, height, title=""):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.title = title
+        
+    def draw(self):
+        # Draw panel background
+        pyglet.shapes.Rectangle(self.x, self.y, self.width, self.height, 
+                              color=(40, 40, 40)).draw()
+        # Draw panel border
+        pyglet.shapes.BorderedRectangle(self.x, self.y, self.width, self.height,
+                                      border=2, color=(40, 40, 40), 
+                                      border_color=(100, 100, 100)).draw()
+        # Draw title if exists
+        if self.title:
+            pyglet.text.Label(self.title,
+                            font_name='Arial',
+                            font_size=12,
+                            bold=True,
+                            x=self.x + 10,
+                            y=self.y + self.height - 20,
+                            anchor_x='left',
+                            anchor_y='center').draw()
+
 # Create a simple slider class
 class Slider:
     def __init__(self, x, y, width, min_value, max_value, initial_value):
@@ -47,18 +75,31 @@ class Slider:
 # Create the window
 window = pyglet.window.Window(WIDTH, HEIGHT, "Creature Simulation")
 
-# Create the label to display creature stats
-stats_label = pyglet.text.Label('', font_name='Arial', font_size=12, 
-                               x=WIDTH - SIDEBAR_WIDTH + 10, y=HEIGHT - 120,
-                               width=SIDEBAR_WIDTH - 20, multiline=True, 
-                               anchor_x='left', anchor_y='top')
+# Create panels
+control_panel = Panel(WIDTH - SIDEBAR_WIDTH, HEIGHT - 120, SIDEBAR_WIDTH, 120, "Controls")
+stats_panel = Panel(WIDTH - SIDEBAR_WIDTH, HEIGHT - 320, SIDEBAR_WIDTH, 190, "Statistics")
+
+# Create the label to display creature stats with better formatting
+stats_label = pyglet.text.Label('', 
+                               font_name='Arial',
+                               font_size=12,
+                               x=WIDTH - SIDEBAR_WIDTH + 10,
+                               y=HEIGHT - 170,  # Adjusted position
+                               width=SIDEBAR_WIDTH - 20,
+                               multiline=True,
+                               anchor_x='left',
+                               anchor_y='top')
 
 # Create FPS slider and label
-fps_label = pyglet.text.Label('FPS: 1', font_name='Arial', font_size=12, 
-                             x=WIDTH - SIDEBAR_WIDTH + 10, y=HEIGHT - 60,
-                             anchor_x='left', anchor_y='top')
+fps_label = pyglet.text.Label('Simulation Speed (FPS):',
+                             font_name='Arial',
+                             font_size=12,
+                             x=WIDTH - SIDEBAR_WIDTH + 10,
+                             y=HEIGHT - 60,
+                             anchor_x='left',
+                             anchor_y='top')
 
-fps_slider = Slider(WIDTH - SIDEBAR_WIDTH + 10, HEIGHT - 90, 
+fps_slider = Slider(WIDTH - SIDEBAR_WIDTH + 10, HEIGHT - 90,
                    SIDEBAR_WIDTH - 20, MIN_FPS, MAX_FPS, FPS)
 
 # Variable to track if FPS input is active
@@ -96,8 +137,9 @@ class Creature:
 
     def update(self):
         """Reduce health, energy, and hunger over time."""
-        self.hunger -= 1
-        self.energy -= 1
+        self.hunger = max(0, self.hunger - 1)  # Prevent hunger from going below 0
+        self.energy = max(0, self.energy - 1)  # Prevent energy from going below 0
+        
         if self.hunger <= 0:
             self.health -= 1
         if self.health <= 0:
@@ -136,37 +178,39 @@ class Creature:
 # The environment where creatures live
 class Environment:
     def __init__(self, width, height):
-        # Create only one creature in the environment
-        self.width = width
+        # Adjust width to account for sidebar
+        self.width = width - (SIDEBAR_WIDTH // GRID_SIZE)
         self.height = height
-        self.creatures = [Creature(random.randint(0, width-1), random.randint(0, height-1))]  # Only one creature
+        # Ensure creature spawns within the valid grid area
+        self.creatures = [Creature(random.randint(0, self.width-1), 
+                                 random.randint(0, self.height-1))]
         self.eggs = []  # List to track eggs
 
     def update(self, dt):
         """Update the environment, including moving creatures and handling interactions."""
         new_creatures = []
+        eggs_to_remove = []
         
+        # First, check for any eggs that are ready to hatch
+        for egg in self.eggs:
+            egg.update()
+            if egg.ready_to_hatch:
+                eggs_to_remove.append(egg)
+                new_creatures.append(Creature(egg.x, egg.y, health=100, energy=50))
+        
+        # Remove hatched eggs and add new creatures
+        self.eggs = [egg for egg in self.eggs if egg not in eggs_to_remove]
+        self.creatures.extend(new_creatures)
+        
+        # Then update creatures and handle new egg laying
         for creature in self.creatures:
             if creature.health > 0:
                 creature.move(self.width, self.height)
                 creature.update()
 
-                # Create new creature when egg hatches
-                if creature.egg_timer >= 100 and creature.egg:
-                    new_creatures.append(Creature(creature.x, creature.y, health=100, energy=50))
-                    
                 # Check for new eggs
-                if creature.egg:
-                    if creature.egg_timer == 1:
-                        self.eggs.append(Egg(creature.x, creature.y))
-
-        # Add new creatures that hatched from eggs
-        self.creatures.extend(new_creatures)
-
-        # Update and remove hatched eggs
-        self.eggs = [egg for egg in self.eggs if egg.timer < 100]
-        for egg in self.eggs:
-            egg.update()
+                if creature.egg and creature.egg_timer == 1:
+                    self.eggs.append(Egg(creature.x, creature.y))
 
     def draw(self, screen):
         """Draw all creatures and eggs on the screen."""
@@ -190,17 +234,21 @@ class Environment:
 # The egg class to handle egg incubation
 class Egg:
     def __init__(self, x, y):
-        self.x = x  # x position on the grid
-        self.y = y  # y position on the grid
-        self.timer = 0  # Timer for egg incubation
-        self.selected = False  # Whether the egg is selected
+        self.x = x
+        self.y = y
+        self.timer = 0
+        self.selected = False
+        self.ready_to_hatch = False  # New flag to indicate hatching
 
     def update(self):
-        """Increment the egg's timer."""
-        self.timer += 1
+        """Increment the egg's timer and check if ready to hatch."""
+        if self.timer < 100:
+            self.timer += 1
+        if self.timer >= 100:
+            self.ready_to_hatch = True
 
     def __str__(self):
-        return f"Egg Timer: {self.timer}"
+        return f"Egg Timer: {min(self.timer, 100)}"
 
 # Handle mouse clicks
 selected_creature = None  # No creature is selected initially
@@ -215,50 +263,49 @@ def on_mouse_press(x, y, button, modifiers):
         creature_found = False
         egg_found = False
 
-        # Handle creature selection
+        # First check if we clicked on a creature
         for creature in env.creatures:
             if creature.x == grid_x and creature.y == grid_y:
-                # Deselect the previous selected egg (if any)
-                if selected_egg:
-                    selected_egg.selected = False
-                
-                # Deselect the previous selected creature (if any)
-                if selected_creature:
-                    selected_creature.selected = False
-                
-                # Select the new creature
-                selected_creature = creature
-                selected_creature.selected = True
                 creature_found = True
-                break
-
-        # Handle egg selection
-        if not creature_found:
-            for egg in env.eggs:
-                if egg.x == grid_x and egg.y == grid_y:
-                    # Deselect the previous selected creature (if any)
+                # Only select if it's not already selected
+                if selected_creature != creature:
+                    # Deselect previous selections
                     if selected_creature:
                         selected_creature.selected = False
-                    
-                    # Deselect the previous selected egg (if any)
                     if selected_egg:
                         selected_egg.selected = False
-                    
-                    # Select the new egg
-                    selected_egg = egg
-                    selected_egg.selected = True
+                        selected_egg = None
+                    # Select new creature
+                    selected_creature = creature
+                    selected_creature.selected = True
+                break
+
+        # Then check if we clicked on an egg
+        if not creature_found:  # Only check eggs if we didn't click a creature
+            for egg in env.eggs:
+                if egg.x == grid_x and egg.y == grid_y:
                     egg_found = True
+                    # Only select if it's not already selected
+                    if selected_egg != egg:
+                        # Deselect previous selections
+                        if selected_creature:
+                            selected_creature.selected = False
+                            selected_creature = None
+                        if selected_egg:
+                            selected_egg.selected = False
+                        # Select new egg
+                        selected_egg = egg
+                        selected_egg.selected = True
                     break
 
-        # Deselect everything if no creature or egg is clicked
+        # Deselect everything if clicking empty space
         if not creature_found and not egg_found:
             if selected_creature:
                 selected_creature.selected = False
+                selected_creature = None
             if selected_egg:
                 selected_egg.selected = False
-
-            selected_creature = None
-            selected_egg = None
+                selected_egg = None
 
         update_stats()
 
@@ -268,13 +315,6 @@ def on_mouse_press(x, y, button, modifiers):
             fps_slider.dragging = True
             new_fps = fps_slider.update_value(x)
             update_fps(new_fps)
-        else:
-            # Deselect if clicked elsewhere on sidebar
-            if selected_creature:
-                selected_creature.selected = False
-            selected_creature = None
-            selected_egg = None
-            update_stats()
 
 @window.event
 def on_mouse_drag(x, y, dx, dy, buttons, modifiers):
@@ -294,12 +334,24 @@ def update_fps(new_fps):
     pyglet.clock.unschedule(update)
     pyglet.clock.schedule_interval(update, 1.0 / FPS)
 
-# Update the stats label when a creature or egg is selected
+def format_stats(creature):
+    """Format creature stats in a more readable way"""
+    if not creature:
+        return "No creature selected"
+    
+    return f"""Health: {creature.health}%
+Energy: {creature.energy}%
+Hunger: {creature.hunger}%
+Happiness: {round(creature.happiness)}%
+Position: ({creature.x}, {creature.y})
+Has Egg: {'Yes' if creature.egg else 'No'}"""
+
 def update_stats():
+    """Update the stats with formatted text"""
     if selected_creature:
-        stats_label.text = f"Selected Creature:\n{selected_creature}\n(x: {selected_creature.x}, y: {selected_creature.y})"
+        stats_label.text = format_stats(selected_creature)
     elif selected_egg:
-        stats_label.text = f"Selected Egg:\n{selected_egg}\n(x: {selected_egg.x}, y: {selected_egg.y})"
+        stats_label.text = f"Selected Egg:\nIncubation: {selected_egg.timer}%\nPosition: ({selected_egg.x}, {selected_egg.y})"
     else:
         stats_label.text = "No creature or egg selected"
 
@@ -310,6 +362,16 @@ env = Environment(WIDTH // GRID_SIZE, HEIGHT // GRID_SIZE)
 @window.event
 def on_draw():
     window.clear()
+    
+    # Draw sidebar background
+    pyglet.shapes.Rectangle(WIDTH - SIDEBAR_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT,
+                          color=(30, 30, 30)).draw()
+    
+    # Draw panels
+    control_panel.draw()
+    stats_panel.draw()
+    
+    # Draw content
     env.draw(window)
     stats_label.draw()
     fps_label.draw()
