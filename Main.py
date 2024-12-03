@@ -334,8 +334,7 @@ Age: {self.age} ({round(age_percent, 1)}% of lifespan)
 Max Age: {self.max_age}
 Mature: {'Yes' if self.mature else 'No'}
 Status: {', '.join(status) if status else 'Active'}
-Position: ({self.x}, {self.y})
-Has Egg: {'Yes' if self.egg else 'No'}"""
+Position: ({self.x}, {self.y})"""
 
     def eat(self, food_source):
         """Consume some food from a dead creature"""
