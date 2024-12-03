@@ -122,6 +122,8 @@ class Creature:
         self.dead = False  # Add new dead state
         self.eating = False  # New state for eating animation/logic
         self.food_value = 100  # Amount of food value when dead
+        self.rest_threshold = random.randint(15, 25)  # Random energy threshold for resting
+        self.wake_threshold = random.randint(85, 95)  # Random energy threshold for waking
 
     def calculate_happiness(self):
         """Calculate the happiness based on health and hunger."""
@@ -165,8 +167,8 @@ class Creature:
         # Reset eating state at start of update
         self.eating = False
 
-        # Look for food if hungry
-        if self.hunger < 50 and not self.sleeping and not self.dead:
+        # Check for nearby food, wake up if very hungry and food is available
+        if self.hunger < 30 and not self.dead:
             # Check adjacent positions for food
             adjacent_positions = [
                 (self.x, self.y + 1),  # up
@@ -179,28 +181,39 @@ class Creature:
                 if (pos_x, pos_y) in env.grid:
                     other = env.grid[(pos_x, pos_y)]
                     if isinstance(other, Creature) and other.dead:
+                        # Wake up if sleeping to eat
+                        if self.sleeping:
+                            self.sleeping = False
+                            self.color = (0, 255, 0)
                         if self.eat(other):
                             env.remove_dead_creature(other)
-                            return  # Skip movement if eating
+                            return  # Skip rest of update if eating
 
-        # Regenerate health if well-fed
-        if self.hunger > 80 and self.health < 100 and not self.sleeping and not self.dead:
-            self.health = min(100, self.health + 1)  # Slow health regeneration when well-fed
-
-        # Check if creature needs to sleep
-        if self.energy <= 20 and not self.sleeping:
-            self.sleeping = True
-            self.color = (100, 100, 255)  # Blue color when sleeping
-        elif self.sleeping and self.energy >= 90:
-            self.sleeping = False
-            self.color = (0, 255, 0)  # Back to green when awake
+        # Second priority: Rest if conditions are right
+        if not self.dead:
+            # Rest if energy is very low
+            if self.energy <= self.rest_threshold and not self.sleeping:
+                self.sleeping = True
+                self.color = (100, 100, 255)  # Blue color when sleeping
+            # Rest if well-fed and energy isn't full (to prepare for egg laying)
+            elif self.hunger > 80 and self.energy < 90 and not self.sleeping:
+                self.sleeping = True
+                self.color = (100, 100, 255)
+            # Wake up if energy is high enough
+            elif self.sleeping and self.energy >= self.wake_threshold:
+                self.sleeping = False
+                self.color = (0, 255, 0)
 
         # Only reduce energy and move if not sleeping
         if not self.sleeping:
             self.hunger = max(0, self.hunger - 1)
-            self.energy = max(0, self.energy - 1)
+            # Vary energy consumption based on activities
+            energy_cost = 2 if self.eating else 1  # Eating costs more energy
+            self.energy = max(0, self.energy - energy_cost)
         else:
-            self.energy = min(100, self.energy + 2)  # Recover energy while sleeping
+            # Vary recovery rate based on hunger
+            recovery_rate = 3 if self.hunger > 50 else 1
+            self.energy = min(100, self.energy + recovery_rate)  # Recover energy while sleeping
         
         if self.hunger <= 0:
             self.health -= 1
