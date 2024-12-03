@@ -110,7 +110,7 @@ class Creature:
                  'sleeping', 'color', 'happiness', 'egg_timer', 'egg',
                  'has_laid_egg', 'dead', 'eating', 'food_value',
                  'rest_threshold', 'wake_threshold', 'age', 'mature',
-                 'env')
+                 'env', 'max_age')
     
     def __init__(self, x, y, environment, health=100, energy=100):
         self.x = x
@@ -132,6 +132,7 @@ class Creature:
         self.rest_threshold = random.randint(15, 25)
         self.wake_threshold = random.randint(85, 95)
         self.age = 0
+        self.max_age = random.randint(300, 500)  # Creatures live between 300-500 ticks
         self.mature = False
 
     def calculate_happiness(self):
@@ -207,8 +208,17 @@ class Creature:
         """Update creature state"""
         if not self.dead:
             self.age += 1
-            if self.age >= 20:
+            if self.age >= 20:  # Maturity age stays at 20
                 self.mature = True
+            
+            # Age effects
+            if self.age > self.max_age * 0.7:  # After 70% of lifespan
+                # Gradual health decline
+                if random.random() < 0.1:  # 10% chance each tick
+                    self.health = max(0, self.health - 1)
+                
+            if self.age >= self.max_age:
+                self.die()
 
         # Reset eating state and color at start of update
         self.eating = False
@@ -260,12 +270,13 @@ class Creature:
 
         # Energy and hunger updates
         if not self.sleeping:
-            self.hunger = max(0, self.hunger - 1)  # Normal hunger drain
+            if random.random() < 0.5:  # 50% chance to lose hunger each tick
+                self.hunger = max(0, self.hunger - 1)  # Normal hunger drain
             energy_cost = 2 if self.eating else 1  # Eating costs more energy
             self.energy = max(0, self.energy - energy_cost)
         else:
             # Reduced hunger drain while sleeping
-            if random.random() < 0.25:  # Only drain hunger 25% of the time while sleeping
+            if random.random() < 0.1:  # Only drain hunger 10% of the time while sleeping (reduced from 25%)
                 self.hunger = max(0, self.hunger - 1)
             recovery_rate = 3 if self.hunger > 50 else 1
             self.energy = min(100, self.energy + recovery_rate)
@@ -278,24 +289,26 @@ class Creature:
 
         self.happiness = self.calculate_happiness()
 
-        # Egg laying logic
-        if not self.egg and not self.has_laid_egg and self.mature:
-            if self.happiness >= 75 and self.energy >= 50:
+        # Egg laying logic - made much more restrictive
+        if not self.egg and self.mature and not self.has_laid_egg:
+            if (self.happiness >= 90 and    # Increased from 85
+                self.energy >= 90 and       # Increased from 75
+                self.hunger >= 90 and       # Increased from 80
+                random.random() < 0.05):    # Reduced from 0.1 (5% chance instead of 10%)
                 self.lay_egg()
 
     def lay_egg(self):
         """Prepare to lay an egg."""
-        if self.energy >= 50 and not self.egg and not self.has_laid_egg:
-            self.energy -= 50
+        if self.energy >= 90 and not self.egg:  # Increased energy requirement
+            self.energy -= 90  # Increased energy cost
             self.egg = True
-            self.has_laid_egg = True
 
     def die(self):
         """Mark the creature as dead instead of removing it."""
         self.dead = True
         self.color = (255, 0, 0)  # Red color for dead creatures
         self.health = 0
-        self.food_value = 100  # Reset food value when dying
+        self.food_value = 300  # Doubled from 100 to 200 - dead creatures provide more food
 
     def __str__(self):
         if self.dead:
@@ -303,12 +316,24 @@ class Creature:
 Remaining Food: {self.food_value}%
 Position: ({self.x}, {self.y})"""
         else:
+            status = []
+            if self.sleeping:
+                status.append("Sleeping")
+            if self.eating:
+                status.append("Eating")
+            if self.has_laid_egg:
+                status.append("Has unhatched egg")
+            
+            age_percent = (self.age / self.max_age) * 100
+            
             return f"""Health: {self.health}%
 Energy: {self.energy}%
 Hunger: {self.hunger}%
 Happiness: {round(self.happiness)}%
-Age: {self.age}
+Age: {self.age} ({round(age_percent, 1)}% of lifespan)
+Max Age: {self.max_age}
 Mature: {'Yes' if self.mature else 'No'}
+Status: {', '.join(status) if status else 'Active'}
 Position: ({self.x}, {self.y})
 Has Egg: {'Yes' if self.egg else 'No'}"""
 
@@ -329,14 +354,25 @@ class Environment:
         self.width = width - (SIDEBAR_WIDTH // GRID_SIZE)
         self.height = height
         # Pass self (environment) to creature constructor
-        self.creatures = [Creature(random.randint(0, self.width-1), 
-                                 random.randint(0, self.height-1),
-                                 self)]  # Pass self here
+        self.creatures = [
+            Creature(random.randint(0, self.width-1), 
+                    random.randint(0, self.height-1),
+                    self)  # Pass self here
+        ]
+        
+        # Add a dead creature at startup
+        dead_creature = Creature(random.randint(0, self.width-1),
+                               random.randint(0, self.height-1),
+                               self)
+        dead_creature.die()  # This sets dead=True and food_value=300
+        self.creatures.append(dead_creature)
+        
         self.eggs = []  # List to track eggs
         self.grid = {}  # Add a grid to track occupied positions
-        # Add initial creature to the grid
+        # Add initial creatures to the grid
         for creature in self.creatures:
             self.grid[(creature.x, creature.y)] = creature
+            
         self.creatures_to_remove = []  # Track creatures to remove after being eaten
         self.cell_size = GRID_SIZE * 2  # Size of each partition cell
         self.spatial_grid = {}  # Spatial partitioning grid
@@ -383,10 +419,12 @@ class Environment:
         for egg in self.eggs:
             egg.update()
             if egg.ready_to_hatch:
+                # Find the parent creature and allow it to lay new eggs
+                for creature in self.creatures:
+                    if creature.has_laid_egg:
+                        creature.has_laid_egg = False
                 eggs_to_remove.append(egg)
-                # Remove egg from grid before adding new creature
                 self.grid.pop((egg.x, egg.y), None)
-                # Pass self when creating new creatures
                 new_creatures.append(Creature(egg.x, egg.y, self, health=100, energy=50))
         
         # Remove hatched eggs and add new creatures
@@ -426,8 +464,9 @@ class Environment:
                         self.eggs.append(new_egg)
                         self.grid[egg_pos] = new_egg
                         creature.egg = False
+                        creature.has_laid_egg = True  # Mark that this creature has an unhatched egg
                     else:
-                        # If no open spots, cancel egg laying but keep has_laid_egg true
+                        # If no open spots, cancel egg laying
                         creature.egg = False
 
     def draw(self, screen):
