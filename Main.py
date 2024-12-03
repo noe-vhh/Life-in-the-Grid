@@ -113,6 +113,7 @@ class Creature:
         self.energy = energy
         self.hunger = 100  # Hunger is 100 when the creature starts (full stomach)
         self.selected = False  # Whether this creature is selected
+        self.sleeping = False  # Add new sleeping state
         self.color = (0, 255, 0)  # Default color (green)
         self.happiness = self.calculate_happiness()
         self.egg_timer = 0  # Timer for the egg to hatch
@@ -125,20 +126,33 @@ class Creature:
 
     def move(self, max_x, max_y):
         """Move the creature randomly within the bounds of the grid, excluding the sidebar."""
-        direction = random.choice(['up', 'down', 'left', 'right'])
-        if direction == 'up' and self.y < max_y - 1:
-            self.y += 1
-        elif direction == 'down' and self.y > 0:
-            self.y -= 1
-        elif direction == 'left' and self.x > 0:
-            self.x -= 1
-        elif direction == 'right' and self.x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) - 1:
-            self.x += 1
+        if not self.sleeping:  # Only move if not sleeping
+            direction = random.choice(['up', 'down', 'left', 'right'])
+            if direction == 'up' and self.y < max_y - 1:
+                self.y += 1
+            elif direction == 'down' and self.y > 0:
+                self.y -= 1
+            elif direction == 'left' and self.x > 0:
+                self.x -= 1
+            elif direction == 'right' and self.x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) - 1:
+                self.x += 1
 
     def update(self):
         """Reduce health, energy, and hunger over time."""
-        self.hunger = max(0, self.hunger - 1)  # Prevent hunger from going below 0
-        self.energy = max(0, self.energy - 1)  # Prevent energy from going below 0
+        # Check if creature needs to sleep
+        if self.energy <= 20 and not self.sleeping:
+            self.sleeping = True
+            self.color = (100, 100, 255)  # Blue color when sleeping
+        elif self.sleeping and self.energy >= 90:
+            self.sleeping = False
+            self.color = (0, 255, 0)  # Back to green when awake
+
+        # Only reduce energy and move if not sleeping
+        if not self.sleeping:
+            self.hunger = max(0, self.hunger - 1)
+            self.energy = max(0, self.energy - 1)
+        else:
+            self.energy = min(100, self.energy + 2)  # Recover energy while sleeping
         
         if self.hunger <= 0:
             self.health -= 1
@@ -147,24 +161,15 @@ class Creature:
 
         self.happiness = self.calculate_happiness()
 
-        # Only try to lay an egg if we don't already have one
+        # Only try to lay an egg if conditions are met
         if not self.egg and not self.has_laid_egg:
             if self.happiness >= 75 and self.energy >= 50:
                 self.lay_egg()
 
-        # Handle egg incubation
-        if self.egg:
-            self.egg_timer += 1
-            if self.egg_timer >= 100:  # Time it takes to hatch the egg
-                self.egg = False
-                self.has_laid_egg = False
-                self.egg_timer = 0
-
     def lay_egg(self):
-        """Lays an egg and reduces energy."""
+        """Prepare to lay an egg."""
         if self.energy >= 50 and not self.egg and not self.has_laid_egg:
             self.energy -= 50
-            self.egg_timer = 0
             self.egg = True
             self.has_laid_egg = True
 
@@ -185,17 +190,56 @@ class Environment:
         self.creatures = [Creature(random.randint(0, self.width-1), 
                                  random.randint(0, self.height-1))]
         self.eggs = []  # List to track eggs
+        self.grid = {}  # Add a grid to track occupied positions
+        # Add initial creature to the grid
+        for creature in self.creatures:
+            self.grid[(creature.x, creature.y)] = creature
+
+    def is_position_occupied(self, x, y):
+        """Check if a position is occupied by any entity"""
+        return (x, y) in self.grid
+
+    def get_adjacent_positions(self, x, y):
+        """Get all valid adjacent positions."""
+        positions = [
+            (x, y+1),    # up
+            (x, y-1),    # down
+            (x-1, y),    # left
+            (x+1, y),    # right
+        ]
+        # Filter out positions that are out of bounds or in the sidebar
+        return [(x, y) for x, y in positions if 
+                0 <= x < self.width and 
+                0 <= y < self.height]
+
+    def find_open_adjacent_spot(self, x, y):
+        """Find an unoccupied adjacent position."""
+        adjacent_positions = self.get_adjacent_positions(x, y)
+        for pos_x, pos_y in adjacent_positions:
+            if not self.is_position_occupied(pos_x, pos_y):
+                return pos_x, pos_y
+        return None
 
     def update(self, dt):
         """Update the environment, including moving creatures and handling interactions."""
         new_creatures = []
         eggs_to_remove = []
         
+        # Update grid positions for creatures and eggs
+        self.grid.clear()
+        for creature in self.creatures:
+            if creature.health > 0:
+                self.grid[(creature.x, creature.y)] = creature
+        for egg in self.eggs:
+            self.grid[(egg.x, egg.y)] = egg
+
         # First, check for any eggs that are ready to hatch
         for egg in self.eggs:
             egg.update()
             if egg.ready_to_hatch:
                 eggs_to_remove.append(egg)
+                # Remove egg from grid before adding new creature
+                self.grid.pop((egg.x, egg.y), None)
                 new_creatures.append(Creature(egg.x, egg.y, health=100, energy=50))
         
         # Remove hatched eggs and add new creatures
@@ -205,12 +249,31 @@ class Environment:
         # Then update creatures and handle new egg laying
         for creature in self.creatures:
             if creature.health > 0:
+                old_x, old_y = creature.x, creature.y
                 creature.move(self.width, self.height)
+                
+                # Check if new position is occupied
+                if self.is_position_occupied(creature.x, creature.y) and (creature.x, creature.y) != (old_x, old_y):
+                    # If occupied, revert to old position
+                    creature.x, creature.y = old_x, old_y
+                else:
+                    # Update grid with new position
+                    self.grid.pop((old_x, old_y), None)
+                    self.grid[(creature.x, creature.y)] = creature
+
                 creature.update()
 
                 # Check for new eggs
-                if creature.egg and creature.egg_timer == 1:
-                    self.eggs.append(Egg(creature.x, creature.y))
+                if creature.egg:
+                    egg_pos = self.find_open_adjacent_spot(creature.x, creature.y)
+                    if egg_pos:
+                        new_egg = Egg(egg_pos[0], egg_pos[1])
+                        self.eggs.append(new_egg)
+                        self.grid[egg_pos] = new_egg
+                        creature.egg = False
+                    else:
+                        # If no open spots, cancel egg laying but keep has_laid_egg true
+                        creature.egg = False
 
     def draw(self, screen):
         """Draw all creatures and eggs on the screen."""
