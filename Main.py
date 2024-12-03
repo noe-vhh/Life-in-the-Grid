@@ -106,105 +106,82 @@ fps_slider = Slider(WIDTH - SIDEBAR_WIDTH + 10, HEIGHT - 90,
 fps_input_active = False
 
 class Creature:
-    def __init__(self, x, y, health=100, energy=100):
-        self.x = x  # x position on the grid
-        self.y = y  # y position on the grid
+    __slots__ = ('x', 'y', 'health', 'energy', 'hunger', 'selected', 
+                 'sleeping', 'color', 'happiness', 'egg_timer', 'egg',
+                 'has_laid_egg', 'dead', 'eating', 'food_value',
+                 'rest_threshold', 'wake_threshold', 'age', 'mature',
+                 'env')
+    
+    def __init__(self, x, y, environment, health=100, energy=100):
+        self.x = x
+        self.y = y
+        self.env = environment
         self.health = health
         self.energy = energy
-        self.hunger = 100  # Hunger is 100 when the creature starts (full stomach)
-        self.selected = False  # Whether this creature is selected
-        self.sleeping = False  # Add new sleeping state
-        self.color = (0, 255, 0)  # Default color (green)
+        self.hunger = 100
+        self.selected = False
+        self.sleeping = False
+        self.color = (0, 255, 0)
         self.happiness = self.calculate_happiness()
-        self.egg_timer = 0  # Timer for the egg to hatch
-        self.egg = None  # No egg initially
-        self.has_laid_egg = False  # Flag to check if the creature has laid an egg
-        self.dead = False  # Add new dead state
-        self.eating = False  # New state for eating animation/logic
-        self.food_value = 100  # Amount of food value when dead
-        self.rest_threshold = random.randint(15, 25)  # Random energy threshold for resting
-        self.wake_threshold = random.randint(85, 95)  # Random energy threshold for waking
-        self.age = 0  # Add age counter
-        self.mature = False  # Add maturity flag
+        self.egg_timer = 0
+        self.egg = None
+        self.has_laid_egg = False
+        self.dead = False
+        self.eating = False
+        self.food_value = 100
+        self.rest_threshold = random.randint(15, 25)
+        self.wake_threshold = random.randint(85, 95)
+        self.age = 0
+        self.mature = False
 
     def calculate_happiness(self):
         """Calculate the happiness based on health and hunger."""
         return (self.health + self.hunger) / 2  # Happiness is the average of health and hunger
 
     def move(self, max_x, max_y):
-        """Move the creature, seeking food if hungry"""
-        if self.sleeping or self.dead:  # Don't move if sleeping or dead
+        if self.sleeping or self.dead:
             return
 
-        if self.hunger < 50:  # If hungry, look for food
-            # Get nearest dead creature position from environment
-            food_pos = env.find_nearest_food(self.x, self.y)
-            if food_pos:
-                food_x, food_y = food_pos
-                
-                # Calculate all possible moves and their scores
-                possible_moves = []
-                for dx, dy in [(0,1), (0,-1), (1,0), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
-                    new_x = self.x + dx
-                    new_y = self.y + dy
-                    
-                    # Check if move is valid
-                    if (0 <= new_x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) and 
-                        0 <= new_y < max_y and 
-                        not env.is_position_blocked(new_x, new_y)):
-                        
-                        # Calculate base score using Manhattan distance to food
-                        distance_to_food = abs(new_x - food_x) + abs(new_y - food_y)
-                        score = 100 - distance_to_food  # Higher score for closer positions
-                        
-                        # Penalize positions that are crowded
-                        nearby_creatures = env.count_nearby_creatures(new_x, new_y)
-                        score -= nearby_creatures * 15  # Penalty for each nearby creature
-                        
-                        # Bonus for moves that maintain momentum (diagonal movement)
-                        if abs(dx) + abs(dy) == 2:  # Diagonal move
-                            score += 5
-                        
-                        # Small random factor to prevent gridlock (1-3 points)
-                        score += random.uniform(1, 3)
-                        
-                        possible_moves.append((new_x, new_y, score))
-                
-                # Choose the move with the highest score
-                if possible_moves:
-                    possible_moves.sort(key=lambda x: x[2], reverse=True)
-                    self.x, self.y = possible_moves[0][0], possible_moves[0][1]
-                return
-
-        # If not hungry or no food found, move with improved wandering behavior
-        possible_moves = []
-        for dx, dy in [(0,1), (0,-1), (1,0), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
-            new_x = self.x + dx
-            new_y = self.y + dy
-            
-            if (0 <= new_x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) and 
-                0 <= new_y < max_y and 
-                not env.is_position_blocked(new_x, new_y)):
-                
-                score = 50  # Base score
-                
-                # Prefer less crowded areas
-                nearby_creatures = env.count_nearby_creatures(new_x, new_y)
-                score -= nearby_creatures * 10
-                
-                # Prefer staying away from edges slightly
-                if new_x <= 1 or new_x >= max_x - 2 or new_y <= 1 or new_y >= max_y - 2:
-                    score -= 5
-                    
-                # Add random factor for natural movement
-                score += random.uniform(0, 20)
-                
-                possible_moves.append((new_x, new_y, score))
+        # Cache nearby entities using spatial partitioning
+        nearby_entities = self.env.get_nearby_entities(self.x, self.y)
         
-        # Move to the position with the highest score
-        if possible_moves and random.random() < 0.8:  # 80% chance to move
-            possible_moves.sort(key=lambda x: x[2], reverse=True)
-            self.x, self.y = possible_moves[0][0], possible_moves[0][1]
+        # Movement vector based on various factors
+        move_vector = [0, 0]
+        
+        # Avoid crowding
+        for entity in nearby_entities:
+            if isinstance(entity, Creature) and not entity.dead:
+                dx = self.x - entity.x
+                dy = self.y - entity.y
+                dist = max(1, abs(dx) + abs(dy))
+                move_vector[0] += dx / (dist * dist)
+                move_vector[1] += dy / (dist * dist)
+        
+        # Add food seeking behavior if hungry
+        if self.hunger < 50:
+            food_pos = self.env.find_nearest_food(self.x, self.y)
+            if food_pos:
+                dx = food_pos[0] - self.x
+                dy = food_pos[1] - self.y
+                dist = max(1, abs(dx) + abs(dy))
+                move_vector[0] += dx * 2 / dist  # Stronger attraction to food
+                move_vector[1] += dy * 2 / dist
+
+        # Add random movement if no other factors
+        if move_vector[0] == 0 and move_vector[1] == 0:
+            move_vector = [random.uniform(-1, 1), random.uniform(-1, 1)]
+
+        # Normalize and apply movement
+        magnitude = max(1, (move_vector[0]**2 + move_vector[1]**2)**0.5)
+        new_x = self.x + round(move_vector[0] / magnitude)
+        new_y = self.y + round(move_vector[1] / magnitude)
+        
+        # Boundary checking
+        new_x = max(0, min(new_x, max_x - 1))
+        new_y = max(0, min(new_y, max_y - 1))
+        
+        if not self.env.is_position_blocked(new_x, new_y):
+            self.x, self.y = new_x, new_y
 
     def update(self):
         """Update creature state"""
@@ -235,8 +212,8 @@ class Creature:
             ]
             
             for pos_x, pos_y in adjacent_positions:
-                if (pos_x, pos_y) in env.grid:
-                    other = env.grid[(pos_x, pos_y)]
+                if (pos_x, pos_y) in self.env.grid:
+                    other = self.env.grid[(pos_x, pos_y)]
                     if isinstance(other, Creature) and other.dead and other.food_value > 0:
                         # Wake up if sleeping to eat when very hungry
                         if self.sleeping and self.hunger < 30:
@@ -244,7 +221,7 @@ class Creature:
                             self.color = (0, 255, 0)
                         if not self.sleeping:  # Only eat if awake
                             if self.eat(other):
-                                env.remove_dead_creature(other)
+                                self.env.remove_dead_creature(other)
                                 return  # Skip rest of update if eating
 
         if not self.dead:  # Rest behavior
@@ -331,16 +308,19 @@ class Environment:
         # Adjust width to account for sidebar
         self.width = width - (SIDEBAR_WIDTH // GRID_SIZE)
         self.height = height
-        # Ensure creature spawns within the valid grid area
+        # Pass self (environment) to creature constructor
         self.creatures = [Creature(random.randint(0, self.width-1), 
-                                 random.randint(0, self.height-1))]
+                                 random.randint(0, self.height-1),
+                                 self)]  # Pass self here
         self.eggs = []  # List to track eggs
         self.grid = {}  # Add a grid to track occupied positions
         # Add initial creature to the grid
         for creature in self.creatures:
             self.grid[(creature.x, creature.y)] = creature
         self.creatures_to_remove = []  # Track creatures to remove after being eaten
-
+        self.cell_size = GRID_SIZE * 2  # Size of each partition cell
+        self.spatial_grid = {}  # Spatial partitioning grid
+        
     def is_position_occupied(self, x, y):
         """Check if a position is occupied by any entity"""
         return (x, y) in self.grid
@@ -386,7 +366,8 @@ class Environment:
                 eggs_to_remove.append(egg)
                 # Remove egg from grid before adding new creature
                 self.grid.pop((egg.x, egg.y), None)
-                new_creatures.append(Creature(egg.x, egg.y, health=100, energy=50))
+                # Pass self when creating new creatures
+                new_creatures.append(Creature(egg.x, egg.y, self, health=100, energy=50))
         
         # Remove hatched eggs and add new creatures
         self.eggs = [egg for egg in self.eggs if egg not in eggs_to_remove]
@@ -430,43 +411,40 @@ class Environment:
                         creature.egg = False
 
     def draw(self, screen):
-        """Draw all creatures and eggs on the screen."""
+        # Create batch for efficient rendering
+        batch = pyglet.graphics.Batch()
+        
+        # Create all shapes in the batch
+        shapes = []
         for creature in self.creatures:
-            # Add visual indicator for eating
             if creature.eating:
-                # Draw eating animation (yellow circle behind creature)
-                pyglet.shapes.Circle(creature.x * GRID_SIZE + GRID_SIZE // 2, 
-                                   creature.y * GRID_SIZE + GRID_SIZE // 2, 
-                                   GRID_SIZE // 2 + 4, 
-                                   color=(255, 255, 0), 
-                                   batch=None).draw()
-
-            # For dead creatures, adjust color based on remaining food value
-            if creature.dead:
-                # Fade from red to dark red as food value decreases
-                red_value = int(255 * (creature.food_value / 100))
-                creature.color = (red_value, 0, 0)
-
+                shapes.append(pyglet.shapes.Circle(
+                    creature.x * GRID_SIZE + GRID_SIZE // 2,
+                    creature.y * GRID_SIZE + GRID_SIZE // 2,
+                    GRID_SIZE // 2 + 4,
+                    color=(255, 255, 0),
+                    batch=batch
+                ))
+            
             if creature.selected:
-                pyglet.shapes.Circle(creature.x * GRID_SIZE + GRID_SIZE // 2, 
-                                   creature.y * GRID_SIZE + GRID_SIZE // 2, 
-                                   GRID_SIZE // 2 + 2, 
-                                   color=(255, 255, 255), 
-                                   batch=None).draw()
-
-            pyglet.shapes.Circle(creature.x * GRID_SIZE + GRID_SIZE // 2, 
-                               creature.y * GRID_SIZE + GRID_SIZE // 2, 
-                               GRID_SIZE // 2, 
-                               color=creature.color, 
-                               batch=None).draw()
-
-        # Draw the eggs (as small yellow circles)
-        for egg in self.eggs:
-            # Only draw the white border if the egg is selected
-            if egg.selected:
-                pyglet.shapes.Circle(egg.x * GRID_SIZE + GRID_SIZE // 2, egg.y * GRID_SIZE + GRID_SIZE // 2, GRID_SIZE // 4 + 2, color=(255, 255, 255), batch=None).draw()
-
-            pyglet.shapes.Circle(egg.x * GRID_SIZE + GRID_SIZE // 2, egg.y * GRID_SIZE + GRID_SIZE // 2, GRID_SIZE // 4, color=(255, 255, 0), batch=None).draw()
+                shapes.append(pyglet.shapes.Circle(
+                    creature.x * GRID_SIZE + GRID_SIZE // 2,
+                    creature.y * GRID_SIZE + GRID_SIZE // 2,
+                    GRID_SIZE // 2 + 2,
+                    color=(255, 255, 255),
+                    batch=batch
+                ))
+            
+            shapes.append(pyglet.shapes.Circle(
+                creature.x * GRID_SIZE + GRID_SIZE // 2,
+                creature.y * GRID_SIZE + GRID_SIZE // 2,
+                GRID_SIZE // 2,
+                color=creature.color,
+                batch=batch
+            ))
+        
+        # Draw everything in one call
+        batch.draw()
 
     def is_position_blocked(self, x, y):
         """Check if a position is blocked by a living creature"""
@@ -520,6 +498,29 @@ class Environment:
                     if isinstance(entity, Creature) and not entity.dead:
                         count += 1
         return count
+
+    def get_nearby_entities(self, x, y, radius=2):
+        """Get entities in nearby cells using spatial partitioning"""
+        cell_x = x // self.cell_size
+        cell_y = y // self.cell_size
+        nearby = []
+        
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                cell = (cell_x + dx, cell_y + dy)
+                if cell in self.spatial_grid:
+                    nearby.extend(self.spatial_grid[cell])
+        
+        return nearby
+
+    def update_spatial_grid(self):
+        """Update spatial partitioning grid"""
+        self.spatial_grid.clear()
+        for creature in self.creatures:
+            cell = (creature.x // self.cell_size, creature.y // self.cell_size)
+            if cell not in self.spatial_grid:
+                self.spatial_grid[cell] = []
+            self.spatial_grid[cell].append(creature)
 
 # The egg class to handle egg incubation
 class Egg:
