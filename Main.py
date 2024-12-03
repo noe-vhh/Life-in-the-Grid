@@ -124,6 +124,8 @@ class Creature:
         self.food_value = 100  # Amount of food value when dead
         self.rest_threshold = random.randint(15, 25)  # Random energy threshold for resting
         self.wake_threshold = random.randint(85, 95)  # Random energy threshold for waking
+        self.age = 0  # Add age counter
+        self.mature = False  # Add maturity flag
 
     def calculate_happiness(self):
         """Calculate the happiness based on health and hunger."""
@@ -164,6 +166,12 @@ class Creature:
 
     def update(self):
         """Update creature state"""
+        # Add age counter and maturity check at the start of update
+        if not self.dead:
+            self.age += 1
+            if self.age >= 20:  # Mature after 20 updates
+                self.mature = True
+
         # Reset eating state at start of update
         self.eating = False
 
@@ -223,7 +231,7 @@ class Creature:
         self.happiness = self.calculate_happiness()
 
         # Only try to lay an egg if conditions are met
-        if not self.egg and not self.has_laid_egg:
+        if not self.egg and not self.has_laid_egg and self.mature:
             if self.happiness >= 75 and self.energy >= 50:
                 self.lay_egg()
 
@@ -251,6 +259,8 @@ Position: ({self.x}, {self.y})"""
 Energy: {self.energy}%
 Hunger: {self.hunger}%
 Happiness: {round(self.happiness)}%
+Age: {self.age}
+Mature: {'Yes' if self.mature else 'No'}
 Position: ({self.x}, {self.y})
 Has Egg: {'Yes' if self.egg else 'No'}"""
 
