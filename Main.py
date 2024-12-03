@@ -119,26 +119,74 @@ class Creature:
         self.egg_timer = 0  # Timer for the egg to hatch
         self.egg = None  # No egg initially
         self.has_laid_egg = False  # Flag to check if the creature has laid an egg
+        self.dead = False  # Add new dead state
+        self.eating = False  # New state for eating animation/logic
+        self.food_value = 100  # Amount of food value when dead
 
     def calculate_happiness(self):
         """Calculate the happiness based on health and hunger."""
         return (self.health + self.hunger) / 2  # Happiness is the average of health and hunger
 
     def move(self, max_x, max_y):
-        """Move the creature randomly within the bounds of the grid, excluding the sidebar."""
-        if not self.sleeping:  # Only move if not sleeping
-            direction = random.choice(['up', 'down', 'left', 'right'])
-            if direction == 'up' and self.y < max_y - 1:
-                self.y += 1
-            elif direction == 'down' and self.y > 0:
-                self.y -= 1
-            elif direction == 'left' and self.x > 0:
-                self.x -= 1
-            elif direction == 'right' and self.x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) - 1:
-                self.x += 1
+        """Move the creature, seeking food if hungry"""
+        if self.sleeping:  # Don't move if sleeping
+            return
+
+        if self.hunger < 50:  # If hungry, look for food
+            # Get nearest dead creature position from environment
+            food_pos = env.find_nearest_food(self.x, self.y)
+            if food_pos:
+                # Move towards food
+                food_x, food_y = food_pos
+                # Determine direction to move
+                if self.x < food_x and self.x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) - 1:
+                    self.x += 1
+                elif self.x > food_x and self.x > 0:
+                    self.x -= 1
+                elif self.y < food_y and self.y < max_y - 1:
+                    self.y += 1
+                elif self.y > food_y and self.y > 0:
+                    self.y -= 1
+                return
+
+        # If not hungry or no food found, move randomly as before
+        direction = random.choice(['up', 'down', 'left', 'right'])
+        if direction == 'up' and self.y < max_y - 1:
+            self.y += 1
+        elif direction == 'down' and self.y > 0:
+            self.y -= 1
+        elif direction == 'left' and self.x > 0:
+            self.x -= 1
+        elif direction == 'right' and self.x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) - 1:
+            self.x += 1
 
     def update(self):
-        """Reduce health, energy, and hunger over time."""
+        """Update creature state"""
+        # Reset eating state at start of update
+        self.eating = False
+
+        # Look for food if hungry
+        if self.hunger < 50 and not self.sleeping and not self.dead:
+            # Check adjacent positions for food
+            adjacent_positions = [
+                (self.x, self.y + 1),  # up
+                (self.x, self.y - 1),  # down
+                (self.x - 1, self.y),  # left
+                (self.x + 1, self.y),  # right
+            ]
+            
+            for pos_x, pos_y in adjacent_positions:
+                if (pos_x, pos_y) in env.grid:
+                    other = env.grid[(pos_x, pos_y)]
+                    if isinstance(other, Creature) and other.dead:
+                        if self.eat(other):
+                            env.remove_dead_creature(other)
+                            return  # Skip movement if eating
+
+        # Regenerate health if well-fed
+        if self.hunger > 80 and self.health < 100 and not self.sleeping and not self.dead:
+            self.health = min(100, self.health + 1)  # Slow health regeneration when well-fed
+
         # Check if creature needs to sleep
         if self.energy <= 20 and not self.sleeping:
             self.sleeping = True
@@ -174,11 +222,34 @@ class Creature:
             self.has_laid_egg = True
 
     def die(self):
-        """Remove the creature from the simulation."""
-        self.x = self.y = -1  # Mark as dead
+        """Mark the creature as dead instead of removing it."""
+        self.dead = True
+        self.color = (255, 0, 0)  # Red color for dead creatures
+        self.health = 0
+        self.food_value = 100  # Reset food value when dying
 
     def __str__(self):
-        return f"Health: {self.health}, Energy: {self.energy}, Hunger: {self.hunger}, Happiness: {self.happiness}, Laid Egg: {self.has_laid_egg}"
+        if self.dead:
+            return f"""DEAD CREATURE
+Remaining Food: {self.food_value}%
+Position: ({self.x}, {self.y})"""
+        else:
+            return f"""Health: {self.health}%
+Energy: {self.energy}%
+Hunger: {self.hunger}%
+Happiness: {round(self.happiness)}%
+Position: ({self.x}, {self.y})
+Has Egg: {'Yes' if self.egg else 'No'}"""
+
+    def eat(self, food_source):
+        """Consume some food from a dead creature"""
+        if not self.dead and food_source.dead and food_source.food_value > 0:
+            self.eating = True
+            food_amount = min(30, food_source.food_value)  # Take up to 30 food value
+            food_source.food_value -= food_amount
+            self.hunger = min(100, self.hunger + food_amount)
+            return True
+        return False
 
 # The environment where creatures live
 class Environment:
@@ -194,6 +265,7 @@ class Environment:
         # Add initial creature to the grid
         for creature in self.creatures:
             self.grid[(creature.x, creature.y)] = creature
+        self.creatures_to_remove = []  # Track creatures to remove after being eaten
 
     def is_position_occupied(self, x, y):
         """Check if a position is occupied by any entity"""
@@ -228,8 +300,8 @@ class Environment:
         # Update grid positions for creatures and eggs
         self.grid.clear()
         for creature in self.creatures:
-            if creature.health > 0:
-                self.grid[(creature.x, creature.y)] = creature
+            # Include dead creatures in the grid
+            self.grid[(creature.x, creature.y)] = creature
         for egg in self.eggs:
             self.grid[(egg.x, egg.y)] = egg
 
@@ -246,11 +318,19 @@ class Environment:
         self.eggs = [egg for egg in self.eggs if egg not in eggs_to_remove]
         self.creatures.extend(new_creatures)
         
+        # Remove eaten creatures
+        if self.creatures_to_remove:
+            self.creatures = [c for c in self.creatures if c not in self.creatures_to_remove]
+            self.creatures_to_remove.clear()
+
         # Then update creatures and handle new egg laying
         for creature in self.creatures:
             if creature.health > 0:
                 old_x, old_y = creature.x, creature.y
-                creature.move(self.width, self.height)
+                
+                # Only move if not eating
+                if not creature.eating:
+                    creature.move(self.width, self.height)
                 
                 # Check if new position is occupied
                 if self.is_position_occupied(creature.x, creature.y) and (creature.x, creature.y) != (old_x, old_y):
@@ -278,13 +358,33 @@ class Environment:
     def draw(self, screen):
         """Draw all creatures and eggs on the screen."""
         for creature in self.creatures:
-            if creature.health > 0:
-                # Only draw the white border if the creature is selected
-                if creature.selected:
-                    pyglet.shapes.Circle(creature.x * GRID_SIZE + GRID_SIZE // 2, creature.y * GRID_SIZE + GRID_SIZE // 2, GRID_SIZE // 2 + 2, color=(255, 255, 255), batch=None).draw()
+            # Add visual indicator for eating
+            if creature.eating:
+                # Draw eating animation (yellow circle behind creature)
+                pyglet.shapes.Circle(creature.x * GRID_SIZE + GRID_SIZE // 2, 
+                                   creature.y * GRID_SIZE + GRID_SIZE // 2, 
+                                   GRID_SIZE // 2 + 4, 
+                                   color=(255, 255, 0), 
+                                   batch=None).draw()
 
-                # Draw the creature itself (green circle)
-                pyglet.shapes.Circle(creature.x * GRID_SIZE + GRID_SIZE // 2, creature.y * GRID_SIZE + GRID_SIZE // 2, GRID_SIZE // 2, color=creature.color, batch=None).draw()
+            # For dead creatures, adjust color based on remaining food value
+            if creature.dead:
+                # Fade from red to dark red as food value decreases
+                red_value = int(255 * (creature.food_value / 100))
+                creature.color = (red_value, 0, 0)
+
+            if creature.selected:
+                pyglet.shapes.Circle(creature.x * GRID_SIZE + GRID_SIZE // 2, 
+                                   creature.y * GRID_SIZE + GRID_SIZE // 2, 
+                                   GRID_SIZE // 2 + 2, 
+                                   color=(255, 255, 255), 
+                                   batch=None).draw()
+
+            pyglet.shapes.Circle(creature.x * GRID_SIZE + GRID_SIZE // 2, 
+                               creature.y * GRID_SIZE + GRID_SIZE // 2, 
+                               GRID_SIZE // 2, 
+                               color=creature.color, 
+                               batch=None).draw()
 
         # Draw the eggs (as small yellow circles)
         for egg in self.eggs:
@@ -293,6 +393,25 @@ class Environment:
                 pyglet.shapes.Circle(egg.x * GRID_SIZE + GRID_SIZE // 2, egg.y * GRID_SIZE + GRID_SIZE // 2, GRID_SIZE // 4 + 2, color=(255, 255, 255), batch=None).draw()
 
             pyglet.shapes.Circle(egg.x * GRID_SIZE + GRID_SIZE // 2, egg.y * GRID_SIZE + GRID_SIZE // 2, GRID_SIZE // 4, color=(255, 255, 0), batch=None).draw()
+
+    def find_nearest_food(self, x, y):
+        """Find the nearest dead creature"""
+        nearest_food = None
+        min_distance = float('inf')
+        
+        for creature in self.creatures:
+            if creature.dead:
+                distance = abs(x - creature.x) + abs(y - creature.y)  # Manhattan distance
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_food = (creature.x, creature.y)
+        
+        return nearest_food
+
+    def remove_dead_creature(self, creature):
+        """Mark a dead creature for removal after being fully consumed"""
+        if creature.food_value <= 0:
+            self.creatures_to_remove.append(creature)
 
 # The egg class to handle egg incubation
 class Egg:
@@ -402,12 +521,7 @@ def format_stats(creature):
     if not creature:
         return "No creature selected"
     
-    return f"""Health: {creature.health}%
-Energy: {creature.energy}%
-Hunger: {creature.hunger}%
-Happiness: {round(creature.happiness)}%
-Position: ({creature.x}, {creature.y})
-Has Egg: {'Yes' if creature.egg else 'No'}"""
+    return str(creature)  # Use the creature's string representation
 
 def update_stats():
     """Update the stats with formatted text"""
