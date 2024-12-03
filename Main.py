@@ -133,72 +133,121 @@ class Creature:
 
     def move(self, max_x, max_y):
         """Move the creature, seeking food if hungry"""
-        if self.sleeping:  # Don't move if sleeping
+        if self.sleeping or self.dead:  # Don't move if sleeping or dead
             return
 
         if self.hunger < 50:  # If hungry, look for food
             # Get nearest dead creature position from environment
             food_pos = env.find_nearest_food(self.x, self.y)
             if food_pos:
-                # Move towards food
                 food_x, food_y = food_pos
-                # Determine direction to move
-                if self.x < food_x and self.x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) - 1:
-                    self.x += 1
-                elif self.x > food_x and self.x > 0:
-                    self.x -= 1
-                elif self.y < food_y and self.y < max_y - 1:
-                    self.y += 1
-                elif self.y > food_y and self.y > 0:
-                    self.y -= 1
+                
+                # Calculate all possible moves and their scores
+                possible_moves = []
+                for dx, dy in [(0,1), (0,-1), (1,0), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
+                    new_x = self.x + dx
+                    new_y = self.y + dy
+                    
+                    # Check if move is valid
+                    if (0 <= new_x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) and 
+                        0 <= new_y < max_y and 
+                        not env.is_position_blocked(new_x, new_y)):
+                        
+                        # Calculate base score using Manhattan distance to food
+                        distance_to_food = abs(new_x - food_x) + abs(new_y - food_y)
+                        score = 100 - distance_to_food  # Higher score for closer positions
+                        
+                        # Penalize positions that are crowded
+                        nearby_creatures = env.count_nearby_creatures(new_x, new_y)
+                        score -= nearby_creatures * 15  # Penalty for each nearby creature
+                        
+                        # Bonus for moves that maintain momentum (diagonal movement)
+                        if abs(dx) + abs(dy) == 2:  # Diagonal move
+                            score += 5
+                        
+                        # Small random factor to prevent gridlock (1-3 points)
+                        score += random.uniform(1, 3)
+                        
+                        possible_moves.append((new_x, new_y, score))
+                
+                # Choose the move with the highest score
+                if possible_moves:
+                    possible_moves.sort(key=lambda x: x[2], reverse=True)
+                    self.x, self.y = possible_moves[0][0], possible_moves[0][1]
                 return
 
-        # If not hungry or no food found, move randomly as before
-        direction = random.choice(['up', 'down', 'left', 'right'])
-        if direction == 'up' and self.y < max_y - 1:
-            self.y += 1
-        elif direction == 'down' and self.y > 0:
-            self.y -= 1
-        elif direction == 'left' and self.x > 0:
-            self.x -= 1
-        elif direction == 'right' and self.x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) - 1:
-            self.x += 1
+        # If not hungry or no food found, move with improved wandering behavior
+        possible_moves = []
+        for dx, dy in [(0,1), (0,-1), (1,0), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
+            new_x = self.x + dx
+            new_y = self.y + dy
+            
+            if (0 <= new_x < (max_x - SIDEBAR_WIDTH // GRID_SIZE) and 
+                0 <= new_y < max_y and 
+                not env.is_position_blocked(new_x, new_y)):
+                
+                score = 50  # Base score
+                
+                # Prefer less crowded areas
+                nearby_creatures = env.count_nearby_creatures(new_x, new_y)
+                score -= nearby_creatures * 10
+                
+                # Prefer staying away from edges slightly
+                if new_x <= 1 or new_x >= max_x - 2 or new_y <= 1 or new_y >= max_y - 2:
+                    score -= 5
+                    
+                # Add random factor for natural movement
+                score += random.uniform(0, 20)
+                
+                possible_moves.append((new_x, new_y, score))
+        
+        # Move to the position with the highest score
+        if possible_moves and random.random() < 0.8:  # 80% chance to move
+            possible_moves.sort(key=lambda x: x[2], reverse=True)
+            self.x, self.y = possible_moves[0][0], possible_moves[0][1]
 
     def update(self):
         """Update creature state"""
-        # Add age counter and maturity check at the start of update
         if not self.dead:
             self.age += 1
-            if self.age >= 20:  # Mature after 20 updates
+            if self.age >= 20:
                 self.mature = True
 
-        # Reset eating state at start of update
+        # Reset eating state and color at start of update
         self.eating = False
+        if not self.sleeping and not self.dead:  # Reset color only if not sleeping or dead
+            self.color = (0, 255, 0)  # Reset to normal green
 
-        # Check for nearby food, wake up if very hungry and food is available
-        if self.hunger < 30 and not self.dead:
-            # Check adjacent positions for food
+        # Health regeneration when well-fed
+        if self.hunger >= 75 and self.health < 100 and not self.dead:
+            health_regen = 2  # Regenerate 2 health per tick when well-fed
+            self.health = min(100, self.health + health_regen)
+            self.color = (100, 255, 100)  # Light green when healing
+
+        # Check for nearby food with improved detection
+        if self.hunger < 70 and not self.dead:  # Food seeking behavior
+            # Check all adjacent positions including diagonals
             adjacent_positions = [
-                (self.x, self.y + 1),  # up
-                (self.x, self.y - 1),  # down
-                (self.x - 1, self.y),  # left
-                (self.x + 1, self.y),  # right
+                (self.x + dx, self.y + dy) 
+                for dx in [-1, 0, 1] 
+                for dy in [-1, 0, 1] 
+                if not (dx == 0 and dy == 0)
             ]
             
             for pos_x, pos_y in adjacent_positions:
                 if (pos_x, pos_y) in env.grid:
                     other = env.grid[(pos_x, pos_y)]
-                    if isinstance(other, Creature) and other.dead:
-                        # Wake up if sleeping to eat
-                        if self.sleeping:
+                    if isinstance(other, Creature) and other.dead and other.food_value > 0:
+                        # Wake up if sleeping to eat when very hungry
+                        if self.sleeping and self.hunger < 30:
                             self.sleeping = False
                             self.color = (0, 255, 0)
-                        if self.eat(other):
-                            env.remove_dead_creature(other)
-                            return  # Skip rest of update if eating
+                        if not self.sleeping:  # Only eat if awake
+                            if self.eat(other):
+                                env.remove_dead_creature(other)
+                                return  # Skip rest of update if eating
 
-        # Second priority: Rest if conditions are right
-        if not self.dead:
+        if not self.dead:  # Rest behavior
             # Rest if energy is very low
             if self.energy <= self.rest_threshold and not self.sleeping:
                 self.sleeping = True
@@ -212,17 +261,19 @@ class Creature:
                 self.sleeping = False
                 self.color = (0, 255, 0)
 
-        # Only reduce energy and move if not sleeping
+        # Energy and hunger updates
         if not self.sleeping:
-            self.hunger = max(0, self.hunger - 1)
-            # Vary energy consumption based on activities
+            self.hunger = max(0, self.hunger - 1)  # Normal hunger drain
             energy_cost = 2 if self.eating else 1  # Eating costs more energy
             self.energy = max(0, self.energy - energy_cost)
         else:
-            # Vary recovery rate based on hunger
+            # Reduced hunger drain while sleeping
+            if random.random() < 0.25:  # Only drain hunger 25% of the time while sleeping
+                self.hunger = max(0, self.hunger - 1)
             recovery_rate = 3 if self.hunger > 50 else 1
-            self.energy = min(100, self.energy + recovery_rate)  # Recover energy while sleeping
+            self.energy = min(100, self.energy + recovery_rate)
         
+        # Health reduction from hunger
         if self.hunger <= 0:
             self.health -= 1
         if self.health <= 0:
@@ -230,7 +281,7 @@ class Creature:
 
         self.happiness = self.calculate_happiness()
 
-        # Only try to lay an egg if conditions are met
+        # Egg laying logic
         if not self.egg and not self.has_laid_egg and self.mature:
             if self.happiness >= 75 and self.energy >= 50:
                 self.lay_egg()
@@ -268,7 +319,7 @@ Has Egg: {'Yes' if self.egg else 'No'}"""
         """Consume some food from a dead creature"""
         if not self.dead and food_source.dead and food_source.food_value > 0:
             self.eating = True
-            food_amount = min(30, food_source.food_value)  # Take up to 30 food value
+            food_amount = min(20, food_source.food_value)  # Take up to 20 food value per tick
             food_source.food_value -= food_amount
             self.hunger = min(100, self.hunger + food_amount)
             return True
@@ -417,24 +468,58 @@ class Environment:
 
             pyglet.shapes.Circle(egg.x * GRID_SIZE + GRID_SIZE // 2, egg.y * GRID_SIZE + GRID_SIZE // 2, GRID_SIZE // 4, color=(255, 255, 0), batch=None).draw()
 
+    def is_position_blocked(self, x, y):
+        """Check if a position is blocked by a living creature"""
+        if (x, y) in self.grid:
+            entity = self.grid[(x, y)]
+            # Allow movement through dead creatures (to prevent gridlock)
+            if isinstance(entity, Creature) and not entity.dead:
+                return True
+        return False
+
     def find_nearest_food(self, x, y):
-        """Find the nearest dead creature"""
-        nearest_food = None
-        min_distance = float('inf')
+        """Find the nearest dead creature with improved accessibility check"""
+        food_sources = []
         
         for creature in self.creatures:
-            if creature.dead:
-                distance = abs(x - creature.x) + abs(y - creature.y)  # Manhattan distance
-                if distance < min_distance:
-                    min_distance = distance
-                    nearest_food = (creature.x, creature.y)
+            if creature.dead and creature.food_value > 0:
+                # Calculate base distance
+                distance = abs(x - creature.x) + abs(y - creature.y)
+                
+                # Check if there's too many creatures already targeting this food
+                nearby_creatures = sum(1 for c in self.creatures 
+                                     if not c.dead and 
+                                     abs(c.x - creature.x) + abs(c.y - creature.y) <= 1)
+                
+                # Add penalty to distance based on nearby creatures
+                distance += nearby_creatures * 2
+                
+                food_sources.append((creature.x, creature.y, distance))
         
-        return nearest_food
+        if food_sources:
+            # Sort by adjusted distance and add small random factor to prevent perfect alignment
+            food_sources.sort(key=lambda x: x[2] + random.uniform(0, 0.5))
+            return (food_sources[0][0], food_sources[0][1])
+            
+        return None
 
     def remove_dead_creature(self, creature):
         """Mark a dead creature for removal after being fully consumed"""
         if creature.food_value <= 0:
             self.creatures_to_remove.append(creature)
+
+    def count_nearby_creatures(self, x, y):
+        """Count number of creatures in adjacent cells"""
+        count = 0
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                check_x = x + dx
+                check_y = y + dy
+                if (check_x, check_y) in self.grid:
+                    entity = self.grid[(check_x, check_y)]
+                    if isinstance(entity, Creature) and not entity.dead:
+                        count += 1
+        return count
 
 # The egg class to handle egg incubation
 class Egg:
