@@ -40,6 +40,9 @@ LEGEND_HEADER_SIZE = 12    # Header text size
 LEGEND_ICON_SIZE = 16      # Icon size
 LEGEND_TOP_PADDING = 50    # Space from top of panel to first item
 
+# Constants for area positioning (add these near other constants)
+QUADRANT_OFFSET = 300  # Increased distance between centers to prevent overlap
+
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -252,16 +255,23 @@ class Creature:
             if self.sleeping:
                 if not self.env.is_in_area(self.x, self.y, "sleeping"):
                     self.move(self.env.width, self.env.height)
-                else:
+                    return  # Don't recover energy if not in sleep zone
+                
+                # Only sleep and recover energy if in sleep zone
+                if self.env.is_in_area(self.x, self.y, "sleeping"):
                     recovery_rate = 3 if self.hunger > 50 else 1
                     self.energy = min(100, self.energy + recovery_rate)
                     if random.random() < 0.1:
                         self.hunger = max(0, self.hunger - 1)
                 
-                if self.energy >= self.wake_threshold:
-                    self.sleeping = False
-                    self.color = (0, 255, 0)
-                    self.target = None
+                    if self.energy >= self.wake_threshold:
+                        self.sleeping = False
+                        self.color = (0, 255, 0)
+                        self.target = None
+                else:
+                    # Keep moving towards sleep zone if not in it
+                    self.target = "sleeping"
+                    self.move(self.env.width, self.env.height)
                 return
 
             # Awake behavior
@@ -524,6 +534,9 @@ class Environment:
         self.creatures_to_remove = []  # Track creatures to remove after being eaten
         self.cell_size = GRID_SIZE * 2  # Size of each partition cell
         self.spatial_grid = {}  # Spatial partitioning grid
+        self.sleeping_area_scale = 1.0
+        self.food_area_scale = 1.0
+        self.nursery_area_scale = 1.0
         
     def is_position_occupied(self, x, y):
         """Check if a position is occupied by any entity"""
@@ -554,6 +567,7 @@ class Environment:
 
     def update(self, dt):
         """Update the environment, including moving creatures and handling interactions."""
+        self.update_area_scales()
         
         # Clear and rebuild grid at the start of update
         self.grid.clear()
@@ -573,6 +587,9 @@ class Environment:
                     self.grid.pop((old_x, old_y), None)
                     self.grid[(creature.x, creature.y)] = creature
             else:
+                # Move dead creatures towards the food zone
+                self.try_move_dead_creature(creature)
+                
                 # Remove dead creatures with no food value
                 if creature.food_value <= 0:
                     self.creatures_to_remove.append(creature)
@@ -599,18 +616,58 @@ class Environment:
         
         # Draw colony areas first
         areas = [
-            ("food", FOOD_STORAGE_RADIUS, (100, 50, 50)),
-            ("nursery", NURSERY_RADIUS, (50, 100, 50)),
-            ("sleeping", SLEEPING_RADIUS, (50, 50, 100))
+            ("food", FOOD_STORAGE_RADIUS * self.food_area_scale, (100, 50, 50), "Food Zone"),
+            ("nursery", NURSERY_RADIUS * self.nursery_area_scale, (50, 100, 50), "Nursery Zone"),
+            ("sleeping", SLEEPING_RADIUS * self.sleeping_area_scale, (50, 50, 100), "Sleeping Zone")
         ]
 
-        for area_type, radius, color in areas:
+        for area_type, radius, color, label in areas:
             center = self.get_area_center(area_type)
-            shapes.append(pyglet.shapes.Circle(
+            
+            # Explicitly unpack RGB values and set very low opacity
+            r, g, b = color
+            # Draw very transparent circle for the zone
+            zone_circle = pyglet.shapes.Circle(
                 center[0], center[1], radius,
-                color=(*color, 50),  # Semi-transparent
+                color=(r, g, b, 20),  # Even more transparent (alpha=20)
                 batch=batch
-            ))
+            )
+            shapes.append(zone_circle)
+            
+            # Draw subtle border for the zone
+            border_circle = pyglet.shapes.Circle(
+                center[0], center[1], radius + 2,
+                color=(255, 255, 255, 30),
+                batch=batch
+            )
+            shapes.append(border_circle)
+            
+            # Calculate label position, ensuring it stays within window bounds
+            label_x = min(max(center[0], 100), WIDTH - SIDEBAR_WIDTH - 100)
+            label_y = min(max(center[1] - radius - 25, 30), HEIGHT - 30)
+            
+            # Draw label with semi-transparent background
+            label_width = len(label) * 8
+            pyglet.shapes.Rectangle(
+                label_x - label_width/2 - 5,
+                label_y - 10,
+                label_width + 10,
+                20,
+                color=(0, 0, 0, 100)
+            ).draw()
+            
+            # Draw the text
+            pyglet.text.Label(
+                label,
+                font_name='Arial',
+                font_size=14,
+                bold=True,
+                x=label_x,
+                y=label_y,
+                anchor_x='center',
+                anchor_y='center',
+                color=(255, 255, 255, 200)
+            ).draw()
 
         # Draw eggs
         for egg in self.eggs:
@@ -712,13 +769,16 @@ class Environment:
             self.spatial_grid[cell].append(creature)
 
     def get_area_center(self, area_type):
-        """Get the center coordinates for different colony areas"""
+        """Get the center coordinates for different colony areas with fixed positions"""
         if area_type == "food":
-            return (NEST_CENTER_X - FOOD_STORAGE_RADIUS, NEST_CENTER_Y)
+            # Food storage in bottom-left quadrant
+            return (NEST_CENTER_X - QUADRANT_OFFSET, NEST_CENTER_Y - QUADRANT_OFFSET)
         elif area_type == "nursery":
-            return (NEST_CENTER_X + NURSERY_RADIUS, NEST_CENTER_Y + NURSERY_RADIUS)
+            # Nursery in top-right quadrant
+            return (NEST_CENTER_X + QUADRANT_OFFSET, NEST_CENTER_Y + QUADRANT_OFFSET)
         elif area_type == "sleeping":
-            return (NEST_CENTER_X, NEST_CENTER_Y - SLEEPING_RADIUS)
+            # Sleeping area in bottom-right quadrant
+            return (NEST_CENTER_X + QUADRANT_OFFSET, NEST_CENTER_Y - QUADRANT_OFFSET)
         return (NEST_CENTER_X, NEST_CENTER_Y)
 
     def is_in_area(self, x, y, area_type):
@@ -730,12 +790,13 @@ class Environment:
         center = self.get_area_center(area_type)
         distance = ((px - center[0])**2 + (py - center[1])**2)**0.5
         
+        # Scale only affects the radius, not the center position
         if area_type == "food":
-            return distance <= FOOD_STORAGE_RADIUS
+            return distance <= FOOD_STORAGE_RADIUS * self.food_area_scale
         elif area_type == "nursery":
-            return distance <= NURSERY_RADIUS
+            return distance <= NURSERY_RADIUS * self.nursery_area_scale
         elif area_type == "sleeping":
-            return distance <= SLEEPING_RADIUS
+            return distance <= SLEEPING_RADIUS * self.sleeping_area_scale
         return False
 
     def find_nursery_spot(self):
@@ -858,8 +919,8 @@ class Environment:
 
         return moved
 
-    def try_move_dead_creature(self, carrier, dead_creature):
-        """Try to move a dead creature towards food storage"""
+    def try_move_dead_creature(self, dead_creature):
+        """Try to move a dead creature towards the food zone"""
         if not isinstance(dead_creature, Creature) or not dead_creature.dead:
             return False
 
@@ -911,6 +972,25 @@ class Environment:
                         self.is_in_area(new_x, new_y, "nursery")):
                         return new_x, new_y
         return None
+
+    def update_area_scales(self):
+        """Update the scales of the areas based on specific needs"""
+        num_creatures = len(self.creatures)
+        num_dead = sum(1 for c in self.creatures if c.dead)
+        num_eggs = len(self.eggs)
+        
+        # Calculate scales based on different needs
+        sleeping_need = num_creatures
+        food_need = num_dead
+        nursery_need = num_eggs
+        
+        # Calculate base scales (more conservative maximum to prevent touching)
+        max_scale = 1.5  # Ensure zones do not touch
+        
+        # Base scale is 1.0, maximum scale prevents touching
+        self.sleeping_area_scale = min(max_scale, 1.0 + (sleeping_need / max(1, num_creatures)) * 0.3)
+        self.food_area_scale = min(max_scale, 1.0 + (food_need / max(1, num_creatures)) * 0.3)
+        self.nursery_area_scale = min(max_scale, 1.0 + (nursery_need / max(1, num_creatures)) * 0.3)
 
 # The egg class to handle egg incubation
 class Egg:
