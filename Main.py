@@ -7,7 +7,7 @@ WIDTH = 1200
 HEIGHT = 900
 GRID_SIZE = 50
 SIDEBAR_WIDTH = 280
-FPS = 1  # Initial FPS
+FPS = 0  # Initial FPS (paused)
 MIN_FPS = 1
 MAX_FPS = 60
 NEST_CENTER_X = WIDTH // 4  # Center of the nest area
@@ -112,37 +112,88 @@ class Slider:
 # Create the window with resizable=False and fixed size
 window = pyglet.window.Window(WIDTH, HEIGHT, "Creature Simulation", resizable=False)
 
-# Create panels
-control_panel = Panel(0, 0, SIDEBAR_WIDTH, CONTROL_PANEL_HEIGHT, "Controls")
-stats_panel = Panel(0, 0, SIDEBAR_WIDTH, STATS_PANEL_HEIGHT, "Statistics")
-legend_panel = Panel(0, 0, SIDEBAR_WIDTH, LEGEND_PANEL_HEIGHT, "Color Legend")
+# Load images for buttons
+pause_unclicked_image = pyglet.resource.image('Assets/icons/pause-play-unclick.png')
+pause_clicked_image = pyglet.resource.image('Assets/icons/pause-play-click.png')
 
-# Create the label to display creature stats with better formatting
-stats_label = pyglet.text.Label('', 
-                               font_name='Arial',
-                               font_size=12,
-                               x=WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 10,
-                               y=HEIGHT - (TOP_MARGIN + CONTROL_PANEL_HEIGHT + PANEL_SPACING + 30),
-                               width=SIDEBAR_WIDTH - 20,
-                               multiline=True,
-                               anchor_x='left',
-                               anchor_y='top')
+play_unclicked_image = pyglet.resource.image('Assets/icons/play-button-unclick.png')
+play_clicked_image = pyglet.resource.image('Assets/icons/play-button-click.png')
 
-# Create FPS slider and label
-fps_label = pyglet.text.Label('Simulation Speed (FPS):',
-                             font_name='Arial',
-                             font_size=12,
-                             x=WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 10,
-                             y=HEIGHT - TOP_MARGIN - 40,
-                             anchor_x='left',
-                             anchor_y='top')
+fast_forward_unclicked_image = pyglet.resource.image('Assets/icons/fast-forward-button-unclick.png')
+fast_forward_clicked_image = pyglet.resource.image('Assets/icons/fast-forward-button-click.png')
 
-fps_slider = Slider(WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 10, 
-                   HEIGHT - TOP_MARGIN - 70,
-                   SIDEBAR_WIDTH - 20, MIN_FPS, MAX_FPS, FPS)
+# Create sprites for buttons with scaling
+icon_scale = 0.075  # Adjusted scale factor
+
+# Calculate the y position to be below the "Controls" label
+buttons_y_position = HEIGHT - CONTROL_PANEL_HEIGHT + 20  # Reduced from 120 to 20 to move buttons higher
+
+# Create panels before anything else
+control_panel = Panel(
+    WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
+    HEIGHT - TOP_MARGIN - CONTROL_PANEL_HEIGHT,
+    SIDEBAR_WIDTH,
+    CONTROL_PANEL_HEIGHT,
+    "Controls"
+)
+
+stats_panel = Panel(
+    WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
+    HEIGHT - TOP_MARGIN - CONTROL_PANEL_HEIGHT - PANEL_SPACING - STATS_PANEL_HEIGHT,
+    SIDEBAR_WIDTH,
+    STATS_PANEL_HEIGHT,
+    "Stats"
+)
+
+legend_panel = Panel(
+    WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
+    HEIGHT - TOP_MARGIN - CONTROL_PANEL_HEIGHT - PANEL_SPACING - 
+    STATS_PANEL_HEIGHT - PANEL_SPACING - LEGEND_PANEL_HEIGHT,
+    SIDEBAR_WIDTH,
+    LEGEND_PANEL_HEIGHT,
+    "Legend"
+)
+
+# Create stats label
+stats_label = pyglet.text.Label(
+    "No creature selected",
+    font_name='Arial',
+    font_size=10,
+    x=WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15,
+    y=stats_panel.y + stats_panel.height - 40,
+    width=SIDEBAR_WIDTH - 30,
+    multiline=True,
+    anchor_x='left',
+    anchor_y='top'
+)
+
+# THEN create the button sprites with pause initially clicked
+pause_button = pyglet.sprite.Sprite(
+    pause_clicked_image,  # Start with clicked image
+    x=WIDTH - SIDEBAR_WIDTH + 15, 
+    y=control_panel.y + control_panel.height - 75
+)
+pause_button.scale = icon_scale
+
+play_button = pyglet.sprite.Sprite(
+    play_unclicked_image, 
+    x=WIDTH - SIDEBAR_WIDTH + 75, 
+    y=control_panel.y + control_panel.height - 75
+)
+play_button.scale = icon_scale
+
+fast_forward_button = pyglet.sprite.Sprite(
+    fast_forward_unclicked_image, 
+    x=WIDTH - SIDEBAR_WIDTH + 135, 
+    y=control_panel.y + control_panel.height - 75
+)
+fast_forward_button.scale = icon_scale
 
 # Variable to track if FPS input is active
 fps_input_active = False
+
+# Add this near the top with other global variables
+current_speed_state = "pause"  # Start paused
 
 class Creature:
     def __init__(self, x, y, environment, health=100, energy=100):
@@ -1043,7 +1094,7 @@ selected_egg = None  # No egg is selected initially
 
 @window.event
 def on_mouse_press(x, y, button, modifiers):
-    global selected_creature, selected_egg
+    global selected_creature, selected_egg, current_speed_state
     if x < WIDTH - SIDEBAR_WIDTH:  # Check if the click is within the grid area
         grid_x = x // GRID_SIZE
         grid_y = y // GRID_SIZE
@@ -1097,29 +1148,55 @@ def on_mouse_press(x, y, button, modifiers):
         update_stats()
 
     else:
-        # Check if clicking on slider
-        if fps_slider.hit_test(x, y):
-            fps_slider.dragging = True
-            new_fps = fps_slider.update_value(x)
-            update_fps(new_fps)
-
-@window.event
-def on_mouse_drag(x, y, dx, dy, buttons, modifiers):
-    if fps_slider.dragging:
-        new_fps = fps_slider.update_value(x)
-        update_fps(new_fps)
-
-@window.event
-def on_mouse_release(x, y, button, modifiers):
-    fps_slider.dragging = False
+        # Calculate button dimensions (use original size * scale)
+        button_width = 38  # Fixed width for hit detection
+        button_height = 38  # Fixed height for hit detection
+        
+        # Pause button
+        pause_area = {
+            'x1': pause_button.x,
+            'x2': pause_button.x + button_width,
+            'y1': pause_button.y,
+            'y2': pause_button.y + button_height
+        }
+        
+        # Pause button
+        if (pause_area['x1'] <= x <= pause_area['x2'] and 
+            pause_area['y1'] <= y <= pause_area['y2']):
+            if current_speed_state != "pause":
+                current_speed_state = "pause"
+                update_fps(0)  # Pause
+                pause_button.image = pause_clicked_image
+                play_button.image = play_unclicked_image
+                fast_forward_button.image = fast_forward_unclicked_image
+        
+        # Play button
+        elif (play_button.x <= x <= play_button.x + button_width and 
+              play_button.y <= y <= play_button.y + button_height):
+            if current_speed_state != "play":
+                current_speed_state = "play"
+                update_fps(1)  # Normal speed
+                play_button.image = play_clicked_image
+                pause_button.image = pause_unclicked_image
+                fast_forward_button.image = fast_forward_unclicked_image
+        
+        # Fast forward button
+        elif (fast_forward_button.x <= x <= fast_forward_button.x + button_width and 
+              fast_forward_button.y <= y <= fast_forward_button.y + button_height):
+            if current_speed_state != "fast":
+                current_speed_state = "fast"
+                update_fps(20)  # Fast speed
+                fast_forward_button.image = fast_forward_clicked_image
+                pause_button.image = pause_unclicked_image
+                play_button.image = play_unclicked_image
 
 def update_fps(new_fps):
     """Update the FPS and reschedule the update function"""
     global FPS
     FPS = new_fps
-    fps_label.text = f'FPS: {FPS}'
     pyglet.clock.unschedule(update)
-    pyglet.clock.schedule_interval(update, 1.0 / FPS)
+    if FPS > 0:  # Only schedule if FPS is greater than 0
+        pyglet.clock.schedule_interval(update, 1.0 / FPS)
 
 def format_stats(creature):
     """Format creature stats in a more readable way"""
@@ -1190,12 +1267,15 @@ def update_ui_positions():
         STATS_PANEL_HEIGHT - PANEL_SPACING - LEGEND_PANEL_HEIGHT
     )
     
-    # Update FPS controls with refined positioning
-    fps_label.x = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15
-    fps_label.y = start_y - 25
+    # Update buttons to be below the "Controls" label
+    pause_button.x = WIDTH - SIDEBAR_WIDTH + 15
+    pause_button.y = control_panel.y + control_panel.height - 75
     
-    fps_slider.x = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15
-    fps_slider.y = start_y - 55
+    play_button.x = WIDTH - SIDEBAR_WIDTH + 75
+    play_button.y = control_panel.y + control_panel.height - 75
+    
+    fast_forward_button.x = WIDTH - SIDEBAR_WIDTH + 135
+    fast_forward_button.y = control_panel.y + control_panel.height - 75
     
     # Update stats label with more space from top of panel
     stats_label.x = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15
@@ -1288,8 +1368,9 @@ def on_draw():
     
     env.draw(window)
     stats_label.draw()
-    fps_label.draw()
-    fps_slider.draw()
+    pause_button.draw()
+    play_button.draw()
+    fast_forward_button.draw()
 
 # Initial UI position update
 update_ui_positions()
@@ -1298,6 +1379,10 @@ update_ui_positions()
 def update(dt):
     env.update(dt)  # Update creatures and eggs
     update_stats()  # Update the stats each frame
+
+# Make sure to schedule the initial update
+if FPS > 0:
+    pyglet.clock.schedule_interval(update, 1.0 / FPS)  # Add this line before pyglet.app.run()
 
 # Run the pyglet application
 pyglet.app.run()
