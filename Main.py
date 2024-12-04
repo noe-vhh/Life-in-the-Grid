@@ -3,8 +3,8 @@ import random
 import math
 
 # Constants
-WIDTH = 800
-HEIGHT = 600
+WIDTH = 1200
+HEIGHT = 900
 GRID_SIZE = 50
 SIDEBAR_WIDTH = 280
 FPS = 1  # Initial FPS
@@ -106,9 +106,8 @@ class Slider:
         self.value = round(self.min_value + normalized_value * (self.max_value - self.min_value))
         return self.value
 
-# Create the window with resizable=True
-window = pyglet.window.Window(max(1024, WIDTH), max(800, HEIGHT), "Creature Simulation", resizable=True)
-window.set_minimum_size(1024, 800)  # Set minimum window size
+# Create the window with resizable=False and fixed size
+window = pyglet.window.Window(WIDTH, HEIGHT, "Creature Simulation", resizable=False)
 
 # Create panels
 control_panel = Panel(0, 0, SIDEBAR_WIDTH, CONTROL_PANEL_HEIGHT, "Controls")
@@ -1145,21 +1144,6 @@ def update_ui_positions():
     # Update stats label with more space from top of panel
     stats_label.x = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15
     stats_label.y = stats_panel.y + stats_panel.height - 40
-
-@window.event
-def on_resize(width, height):
-    """Handle window resizing."""
-    global WIDTH, HEIGHT
-    WIDTH, HEIGHT = width, height
-    
-    # Update UI positions
-    update_ui_positions()
-    
-    # Update environment dimensions
-    env.width = (WIDTH - SIDEBAR_WIDTH - TOP_MARGIN * 2) // GRID_SIZE
-    env.height = HEIGHT // GRID_SIZE
-    
-    return True
 
 @window.event
 def on_draw():
