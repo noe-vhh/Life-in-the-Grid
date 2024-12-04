@@ -6,7 +6,7 @@ import math
 WIDTH = 800
 HEIGHT = 600
 GRID_SIZE = 50
-SIDEBAR_WIDTH = 200
+SIDEBAR_WIDTH = 280
 FPS = 1  # Initial FPS
 MIN_FPS = 1
 MAX_FPS = 60
@@ -15,15 +15,43 @@ NEST_CENTER_Y = HEIGHT // 2
 FOOD_STORAGE_RADIUS = 5 * GRID_SIZE
 NURSERY_RADIUS = 3 * GRID_SIZE
 SLEEPING_RADIUS = 4 * GRID_SIZE
+CONTROL_PANEL_HEIGHT = 90
+STATS_PANEL_HEIGHT = 220
+LEGEND_PANEL_HEIGHT = 520
+TOP_MARGIN = 15
+PANEL_SPACING = 15
+
+# Update Constants with refined sizes and spacing
+SIDEBAR_WIDTH = 280        # Slightly wider for better text display
+TOP_MARGIN = 15           # Slightly larger margin
+PANEL_SPACING = 15        # Increased spacing between panels
+
+# Panel heights
+CONTROL_PANEL_HEIGHT = 90  # Reduced as it only contains FPS control
+STATS_PANEL_HEIGHT = 220  # Increased for stats content
+LEGEND_PANEL_HEIGHT = 520  # Increased for legend content
+
+# Legend specific constants
+LEGEND_ITEM_SPACING = 24   # Space between legend items
+LEGEND_HEADER_SPACING = 30 # Space after headers
+LEGEND_GROUP_SPACING = 15  # Additional space between groups
+LEGEND_TEXT_SIZE = 10      # Text size
+LEGEND_HEADER_SIZE = 12    # Header text size
+LEGEND_ICON_SIZE = 16      # Icon size
+LEGEND_TOP_PADDING = 50    # Space from top of panel to first item
 
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
-        self.x = x
-        self.y = y
         self.width = width
         self.height = height
         self.title = title
+        self.update_position(x, y)  # Separate position update
+        
+    def update_position(self, x, y):
+        """Update panel position"""
+        self.x = x
+        self.y = y
         
     def draw(self):
         # Draw panel background
@@ -78,19 +106,21 @@ class Slider:
         self.value = round(self.min_value + normalized_value * (self.max_value - self.min_value))
         return self.value
 
-# Create the window
-window = pyglet.window.Window(WIDTH, HEIGHT, "Creature Simulation")
+# Create the window with resizable=True
+window = pyglet.window.Window(max(1024, WIDTH), max(800, HEIGHT), "Creature Simulation", resizable=True)
+window.set_minimum_size(1024, 800)  # Set minimum window size
 
 # Create panels
-control_panel = Panel(WIDTH - SIDEBAR_WIDTH, HEIGHT - 120, SIDEBAR_WIDTH, 120, "Controls")
-stats_panel = Panel(WIDTH - SIDEBAR_WIDTH, HEIGHT - 320, SIDEBAR_WIDTH, 190, "Statistics")
+control_panel = Panel(0, 0, SIDEBAR_WIDTH, CONTROL_PANEL_HEIGHT, "Controls")
+stats_panel = Panel(0, 0, SIDEBAR_WIDTH, STATS_PANEL_HEIGHT, "Statistics")
+legend_panel = Panel(0, 0, SIDEBAR_WIDTH, LEGEND_PANEL_HEIGHT, "Color Legend")
 
 # Create the label to display creature stats with better formatting
 stats_label = pyglet.text.Label('', 
                                font_name='Arial',
                                font_size=12,
-                               x=WIDTH - SIDEBAR_WIDTH + 10,
-                               y=HEIGHT - 170,  # Adjusted position
+                               x=WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 10,
+                               y=HEIGHT - (TOP_MARGIN + CONTROL_PANEL_HEIGHT + PANEL_SPACING + 30),
                                width=SIDEBAR_WIDTH - 20,
                                multiline=True,
                                anchor_x='left',
@@ -100,12 +130,13 @@ stats_label = pyglet.text.Label('',
 fps_label = pyglet.text.Label('Simulation Speed (FPS):',
                              font_name='Arial',
                              font_size=12,
-                             x=WIDTH - SIDEBAR_WIDTH + 10,
-                             y=HEIGHT - 60,
+                             x=WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 10,
+                             y=HEIGHT - TOP_MARGIN - 40,
                              anchor_x='left',
                              anchor_y='top')
 
-fps_slider = Slider(WIDTH - SIDEBAR_WIDTH + 10, HEIGHT - 90,
+fps_slider = Slider(WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 10, 
+                   HEIGHT - TOP_MARGIN - 70,
                    SIDEBAR_WIDTH - 20, MIN_FPS, MAX_FPS, FPS)
 
 # Variable to track if FPS input is active
@@ -133,7 +164,8 @@ class Creature:
         self.dead = False
         self.sleeping = False
         self.eating = False
-        self.color = (0, 255, 0)
+        self.base_color = (0, 255, 0)  # Store base color for normal state
+        self.color = self.base_color
         self.happiness = 100
         self.food_value = 100
         self.age_related_health_loss = False
@@ -353,6 +385,42 @@ class Creature:
                     self.target = "nursery"
                     self.color = (255, 200, 200)  # Pink while ready to lay egg
 
+            # Update visual indicators
+            self.update_visual_state()
+
+    def update_visual_state(self):
+        """Update the creature's visual appearance based on its state"""
+        if self.dead:
+            self.color = (255, 0, 0)  # Red for dead
+            return
+
+        # Start with base color
+        r, g, b = self.base_color
+
+        # Health indicator - reduce green as health decreases
+        health_factor = self.health / 100
+        g = int(g * health_factor)
+
+        # Energy indicator - add blue tint when tired
+        if self.energy < self.rest_threshold + 20 and not self.sleeping:
+            b = min(255, b + int((1 - self.energy / 100) * 255))
+
+        # Hunger indicator - add red tint when hungry
+        if self.hunger < 50:
+            r = min(255, r + int((1 - self.hunger / 100) * 255))
+
+        # Special states override the gradual changes
+        if self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping"):
+            self.color = (100, 100, 255)  # Blue only when sleeping in sleep area
+        elif self.eating:
+            self.color = (255, 200, 0)    # Yellow while eating
+        elif self.carrying_food:
+            self.color = (200, 150, 50)   # Brown while carrying
+        elif self.target == "nursery":
+            self.color = (255, 200, 200)  # Pink while ready to lay egg
+        else:
+            self.color = (r, g, b)
+
     def lay_egg(self):
         """Lay an egg in the current position if in nursery"""
         if self.energy >= 90 and not self.egg:
@@ -429,6 +497,48 @@ Position: ({self.x}, {self.y})"""
                 self.color = (255, 200, 0)  # Yellow while eating
                 return True
         return False
+
+    def draw(self, batch):
+        """Draw the creature with additional indicators"""
+        # Add this method to the Creature class
+        shapes = []
+        
+        # Draw status ring if needed
+        if not self.dead and (self.hunger < 30 or self.energy < 30 or self.health < 30):
+            shapes.append(pyglet.shapes.Circle(
+                self.x * GRID_SIZE + GRID_SIZE // 2,
+                self.y * GRID_SIZE + GRID_SIZE // 2,
+                GRID_SIZE // 2 + 2,
+                color=(255, 0, 0),  # Red warning ring
+                batch=batch
+            ))
+
+        # Draw main body
+        shapes.append(pyglet.shapes.Circle(
+            self.x * GRID_SIZE + GRID_SIZE // 2,
+            self.y * GRID_SIZE + GRID_SIZE // 2,
+            GRID_SIZE // 2,
+            color=self.color,
+            batch=batch
+        ))
+
+        # Draw age indicator (smaller circle inside)
+        if self.mature:
+            age_factor = self.age / self.max_age
+            age_color = (
+                int(255 * age_factor),  # More red as they age
+                int(255 * (1 - age_factor)),  # Less green as they age
+                0
+            )
+            shapes.append(pyglet.shapes.Circle(
+                self.x * GRID_SIZE + GRID_SIZE // 2,
+                self.y * GRID_SIZE + GRID_SIZE // 2,
+                GRID_SIZE // 4,  # Half the size of the main circle
+                color=age_color,
+                batch=batch
+            ))
+
+        return shapes
 
 # The environment where creatures live
 class Environment:
@@ -536,60 +646,10 @@ class Environment:
         self.eggs = [egg for egg in self.eggs if egg not in eggs_to_remove]
 
     def draw(self, screen):
-        # Create batch for efficient rendering
         batch = pyglet.graphics.Batch()
-        
-        # Create all shapes in the batch
         shapes = []
         
-        # Draw eggs first (so they appear under creatures)
-        for egg in self.eggs:
-            if egg.selected:
-                shapes.append(pyglet.shapes.Circle(
-                    egg.x * GRID_SIZE + GRID_SIZE // 2,
-                    egg.y * GRID_SIZE + GRID_SIZE // 2,
-                    (GRID_SIZE // 3) + 2,  # Just slightly larger than egg size
-                    color=(255, 255, 255),  # White selection circle
-                    batch=batch
-                ))
-            
-            shapes.append(pyglet.shapes.Circle(
-                egg.x * GRID_SIZE + GRID_SIZE // 2,
-                egg.y * GRID_SIZE + GRID_SIZE // 2,
-                GRID_SIZE // 3,  # Egg size stays the same
-                color=(255, 200, 0),  # Golden/yellow color for eggs
-                batch=batch
-            ))
-        
-        # Draw creatures (existing code)
-        for creature in self.creatures:
-            if creature.eating:
-                shapes.append(pyglet.shapes.Circle(
-                    creature.x * GRID_SIZE + GRID_SIZE // 2,
-                    creature.y * GRID_SIZE + GRID_SIZE // 2,
-                    GRID_SIZE // 2 + 4,
-                    color=(255, 255, 0),
-                    batch=batch
-                ))
-            
-            if creature.selected:
-                shapes.append(pyglet.shapes.Circle(
-                    creature.x * GRID_SIZE + GRID_SIZE // 2,
-                    creature.y * GRID_SIZE + GRID_SIZE // 2,
-                    GRID_SIZE // 2 + 2,
-                    color=(255, 255, 255),
-                    batch=batch
-                ))
-            
-            shapes.append(pyglet.shapes.Circle(
-                creature.x * GRID_SIZE + GRID_SIZE // 2,
-                creature.y * GRID_SIZE + GRID_SIZE // 2,
-                GRID_SIZE // 2,
-                color=creature.color,
-                batch=batch
-            ))
-        
-        # Draw colony areas
+        # Draw colony areas first
         areas = [
             ("food", FOOD_STORAGE_RADIUS, (100, 50, 50)),
             ("nursery", NURSERY_RADIUS, (50, 100, 50)),
@@ -603,6 +663,29 @@ class Environment:
                 color=(*color, 50),  # Semi-transparent
                 batch=batch
             ))
+
+        # Draw eggs
+        for egg in self.eggs:
+            if egg.selected:
+                shapes.append(pyglet.shapes.Circle(
+                    egg.x * GRID_SIZE + GRID_SIZE // 2,
+                    egg.y * GRID_SIZE + GRID_SIZE // 2,
+                    (GRID_SIZE // 3) + 2,
+                    color=(255, 255, 255),
+                    batch=batch
+                ))
+            
+            shapes.append(pyglet.shapes.Circle(
+                egg.x * GRID_SIZE + GRID_SIZE // 2,
+                egg.y * GRID_SIZE + GRID_SIZE // 2,
+                GRID_SIZE // 3,
+                color=(255, 200, 0),
+                batch=batch
+            ))
+
+        # Draw creatures using their new draw method
+        for creature in self.creatures:
+            shapes.extend(creature.draw(batch))
 
         # Draw everything in one call
         batch.draw()
@@ -1003,24 +1086,165 @@ def update_stats():
 # Create the environment with only one creature
 env = Environment(WIDTH // GRID_SIZE, HEIGHT // GRID_SIZE)
 
-# The game loop
+# Update the legend labels to include groups and headers
+legend_labels = [
+    # Group 1: Basic States
+    ("Basic States", "header"),
+    ("Normal Creature", (0, 255, 0)),
+    ("Dead", (255, 0, 0)),
+    ("Egg", (255, 200, 0)),
+    
+    # Group 2: Activities
+    ("Activities", "header"),
+    ("Sleeping (in sleep area)", (100, 100, 255)),
+    ("Eating", (255, 200, 0)),
+    ("Carrying Food", (200, 150, 50)),
+    ("Ready to Lay Egg", (255, 200, 200)),
+    
+    # Group 3: Status Indicators
+    ("Status Indicators", "header"),
+    ("Low Energy (blue tint)", (0, 255, 255)),
+    ("Hungry (red tint)", (255, 255, 0)),
+    ("Critical Status (red ring)", "ring"),
+    
+    # Group 4: Age Indicators
+    ("Age Indicators", "header"),
+    ("Young Adult (inner circle)", "young"),
+    ("Elder (inner circle)", "elder")
+]
+
+def update_ui_positions():
+    """Update all UI element positions with refined spacing"""
+    # Calculate positions from top-right
+    start_y = HEIGHT - TOP_MARGIN
+    
+    # Update panel positions
+    control_panel.update_position(
+        WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
+        start_y - CONTROL_PANEL_HEIGHT
+    )
+    
+    stats_panel.update_position(
+        WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
+        start_y - CONTROL_PANEL_HEIGHT - PANEL_SPACING - STATS_PANEL_HEIGHT
+    )
+    
+    legend_panel.update_position(
+        WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
+        start_y - CONTROL_PANEL_HEIGHT - PANEL_SPACING - 
+        STATS_PANEL_HEIGHT - PANEL_SPACING - LEGEND_PANEL_HEIGHT
+    )
+    
+    # Update FPS controls with refined positioning
+    fps_label.x = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15
+    fps_label.y = start_y - 25
+    
+    fps_slider.x = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15
+    fps_slider.y = start_y - 55
+    
+    # Update stats label with more space from top of panel
+    stats_label.x = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15
+    stats_label.y = stats_panel.y + stats_panel.height - 40
+
+@window.event
+def on_resize(width, height):
+    """Handle window resizing."""
+    global WIDTH, HEIGHT
+    WIDTH, HEIGHT = width, height
+    
+    # Update UI positions
+    update_ui_positions()
+    
+    # Update environment dimensions
+    env.width = (WIDTH - SIDEBAR_WIDTH - TOP_MARGIN * 2) // GRID_SIZE
+    env.height = HEIGHT // GRID_SIZE
+    
+    return True
+
 @window.event
 def on_draw():
     window.clear()
     
-    # Draw sidebar background
-    pyglet.shapes.Rectangle(WIDTH - SIDEBAR_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT,
-                          color=(30, 30, 30)).draw()
+    # Draw panels background area
+    pyglet.shapes.Rectangle(
+        WIDTH - SIDEBAR_WIDTH - TOP_MARGIN, 0, 
+        SIDEBAR_WIDTH + TOP_MARGIN, HEIGHT,
+        color=(30, 30, 30)
+    ).draw()
     
     # Draw panels
     control_panel.draw()
     stats_panel.draw()
+    legend_panel.draw()
     
-    # Draw content
+    # Draw legend with adjusted starting position
+    legend_start_y = legend_panel.y + legend_panel.height - LEGEND_TOP_PADDING
+    y_offset = legend_start_y
+    
+    for label_text, color in legend_labels:
+        if color == "header":
+            # Add extra space before headers (except the first one)
+            if y_offset < legend_start_y:
+                y_offset -= LEGEND_GROUP_SPACING
+            
+            pyglet.text.Label(
+                label_text,
+                font_name='Arial',
+                font_size=LEGEND_HEADER_SIZE,
+                bold=True,
+                x=WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15,
+                y=y_offset,
+                anchor_x='left',
+                anchor_y='center',
+                color=(200, 200, 200, 255)
+            ).draw()
+            y_offset -= LEGEND_HEADER_SPACING
+            continue
+            
+        # Draw indicators with refined positioning
+        x_pos = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 20 + LEGEND_ICON_SIZE//2
+        if color == "ring":
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2 + 2, color=(255, 0, 0)).draw()
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
+        elif color == "young":
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//4, color=(50, 255, 50)).draw()
+        elif color == "elder":
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//4, color=(255, 50, 50)).draw()
+        else:
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2, color=color).draw()
+        
+        # Draw label with refined positioning
+        label = pyglet.text.Label(
+            label_text,
+            font_name='Arial',
+            font_size=LEGEND_TEXT_SIZE,
+            x=WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 45,
+            y=y_offset,
+            width=SIDEBAR_WIDTH - 55,
+            multiline=True,
+            anchor_x='left',
+            anchor_y='center'
+        )
+        label.draw()
+        
+        y_offset -= LEGEND_ITEM_SPACING
+    
     env.draw(window)
     stats_label.draw()
     fps_label.draw()
     fps_slider.draw()
+
+# Initial UI position update
+update_ui_positions()
 
 # Update method (called on every frame)
 def update(dt):
