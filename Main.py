@@ -110,7 +110,7 @@ class Creature:
                  'sleeping', 'color', 'happiness', 'egg_timer', 'egg',
                  'has_laid_egg', 'dead', 'eating', 'food_value',
                  'rest_threshold', 'wake_threshold', 'age', 'mature',
-                 'env', 'max_age')
+                 'env', 'max_age', 'age_related_health_loss', 'death_cause')
     
     def __init__(self, x, y, environment, health=100, energy=100):
         self.x = x
@@ -134,6 +134,8 @@ class Creature:
         self.age = 0
         self.max_age = random.randint(300, 500)  # Creatures live between 300-500 ticks
         self.mature = False
+        self.age_related_health_loss = False  # New flag to track age-related health loss
+        self.death_cause = None
 
     def calculate_happiness(self):
         """Calculate the happiness based on health and hunger."""
@@ -216,7 +218,8 @@ class Creature:
                 # Gradual health decline
                 if random.random() < 0.1:  # 10% chance each tick
                     self.health = max(0, self.health - 1)
-                
+                    self.age_related_health_loss = True  # Set flag when health loss is due to aging
+            
             if self.age >= self.max_age:
                 self.die()
 
@@ -226,7 +229,7 @@ class Creature:
             self.color = (0, 255, 0)  # Reset to normal green
 
         # Health regeneration when well-fed
-        if self.hunger >= 75 and self.health < 100 and not self.dead:
+        if self.hunger >= 75 and self.health < 100 and not self.dead and not self.age_related_health_loss:
             health_regen = 2  # Regenerate 2 health per tick when well-fed
             self.health = min(100, self.health + health_regen)
             self.color = (100, 255, 100)  # Light green when healing
@@ -309,10 +312,19 @@ class Creature:
         self.color = (255, 0, 0)  # Red color for dead creatures
         self.health = 0
         self.food_value = 300  # Doubled from 100 to 200 - dead creatures provide more food
+        
+        # Determine cause of death
+        if self.age >= self.max_age:
+            self.death_cause = "Old Age"
+        elif self.hunger <= 0:
+            self.death_cause = "Starvation"
+        else:
+            self.death_cause = "Unknown"
 
     def __str__(self):
         if self.dead:
             return f"""DEAD CREATURE
+Cause: {self.death_cause}
 Remaining Food: {self.food_value}%
 Position: ({self.x}, {self.y})"""
         else:
@@ -323,6 +335,8 @@ Position: ({self.x}, {self.y})"""
                 status.append("Eating")
             if self.has_laid_egg:
                 status.append("Has unhatched egg")
+            if self.age > self.max_age * 0.7:
+                status.append("(!) Elderly")  # Changed from emoji to standard characters
             
             age_percent = (self.age / self.max_age) * 100
             
