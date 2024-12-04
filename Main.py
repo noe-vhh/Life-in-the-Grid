@@ -148,7 +148,7 @@ class Creature:
         self.egg_laying_cooldown_max = 100
         self.rest_threshold = 30
         self.wake_threshold = 80
-        self.max_age = random.randint(300, 500)
+        self.max_age = random.randint(500, 750)
         self.selected = False
         
         # Then set the basic attributes
@@ -190,23 +190,23 @@ class Creature:
         if self.dead:
             return
         
+        # If we have a target that's a creature or egg, get its position
         target_x, target_y = self.x, self.y
         
-        # Determine target position based on state
-        if self.target == "sleeping":
-            # Get sleep area center
+        if isinstance(self.target, (Creature, Egg)):
+            target_x, target_y = self.target.x, self.target.y
+        elif self.target == "sleeping":
             center = self.env.get_area_center("sleeping")
             target_x = int(center[0] / GRID_SIZE)
             target_y = int(center[1] / GRID_SIZE)
-            # Move directly towards sleep area
-            self.env.try_move_towards(self, target_x, target_y)
-            return
+        elif self.target == "nursery":
+            center = self.env.get_area_center("nursery")
+            target_x = int(center[0] / GRID_SIZE)
+            target_y = int(center[1] / GRID_SIZE)
         elif self.target == "food":
             center = self.env.get_area_center("food")
             target_x = int(center[0] / GRID_SIZE)
             target_y = int(center[1] / GRID_SIZE)
-        elif isinstance(self.target, (Creature, Egg)):
-            target_x, target_y = self.target.x, self.target.y
         else:
             # Random movement with bias towards current direction
             if random.random() < 0.8:
@@ -244,7 +244,7 @@ class Creature:
             # Check for sleep need
             if self.energy <= self.rest_threshold and not self.sleeping:
                 self.sleeping = True
-                self.color = (100, 100, 255)  # Blue while sleeping
+                self.color = (100, 100, 255)
                 self.target = "sleeping"
                 return
 
@@ -253,21 +253,16 @@ class Creature:
                 if not self.env.is_in_area(self.x, self.y, "sleeping"):
                     self.move(self.env.width, self.env.height)
                 else:
-                    # Stay still while sleeping in the correct area
                     recovery_rate = 3 if self.hunger > 50 else 1
                     self.energy = min(100, self.energy + recovery_rate)
                     if random.random() < 0.1:
                         self.hunger = max(0, self.hunger - 1)
                 
-                # Check if we should wake up
                 if self.energy >= self.wake_threshold:
                     self.sleeping = False
                     self.color = (0, 255, 0)
                     self.target = None
                 return
-
-            # Call move method for non-sleeping creatures
-            self.move(self.env.width, self.env.height)
 
             # Awake behavior
             if not self.sleeping:
@@ -276,69 +271,69 @@ class Creature:
                 if not self.carrying_food:
                     self.color = (0, 255, 0)
 
-                # Priority 1: Complete carrying task if already carrying
-                if self.carrying_food and isinstance(self.target, Creature):
-                    if self.env.is_in_area(self.x, self.y, "food"):
-                        # Try to drop in food storage area
-                        adjacent_spots = [
-                            (self.x + dx, self.y + dy)
-                            for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]
-                            if (self.env.is_in_area(self.x + dx, self.y + dy, "food") and 
-                                not self.env.is_position_occupied(self.x + dx, self.y + dy))
-                        ]
-                        
-                        if adjacent_spots:
-                            drop_x, drop_y = random.choice(adjacent_spots)
-                            if self.env.move_entity(self.target, drop_x, drop_y):
-                                self.carrying_food = False
-                                self.target = None
-                                self.color = (0, 255, 0)
-                        return  # Return here to prevent further movement while dropping
-                    else:
-                        # Keep moving towards food storage
-                        self.target = "food"
-                        return  # Skip other behaviors while carrying
+                # Move according to current state
+                self.move(self.env.width, self.env.height)
 
-                # Priority 2: Eating when hungry
-                elif self.hunger < 70:
+                # Priority 1: Find food when hungry
+                if self.hunger < 70 and not self.carrying_food:
                     nearby_entities = self.env.get_nearby_entities(self.x, self.y)
                     found_food = False
                     
+                    # First check if we can eat something adjacent
                     for entity in nearby_entities:
                         if isinstance(entity, Creature) and entity.dead and entity.food_value > 0:
                             dx = abs(self.x - entity.x)
                             dy = abs(self.y - entity.y)
                             if dx + dy == 1:  # Adjacent but not diagonal
                                 if self.eat(entity):
-                                    self.color = (255, 200, 0)  # Yellow while eating
+                                    self.color = (255, 200, 0)
                                     found_food = True
-                                    if entity.food_value <= 0:
-                                        self.env.remove_dead_creature(entity)
+                                    self.target = None  # Clear target after eating
                                     break
                     
-                    if not found_food:
-                        # Move towards nearest food
+                    # If we didn't find adjacent food, look for food to target
+                    if not found_food and not self.target:
+                        # First try nearby food
                         for entity in nearby_entities:
                             if isinstance(entity, Creature) and entity.dead and entity.food_value > 0:
                                 self.target = entity
                                 break
+                        
+                        # If no nearby food, search for nearest food
+                        if not self.target:
+                            nearest_food = self.env.find_nearest_food(self.x, self.y)
+                            if nearest_food:
+                                self.target = "food"
 
-                # Priority 3: Body transport when well-fed
-                elif not self.carrying_food and self.hunger >= 70:
-                    nearby_entities = self.env.get_nearby_entities(self.x, self.y)
-                    for entity in nearby_entities:
-                        if (isinstance(entity, Creature) and entity.dead and 
-                            not self.env.is_in_area(entity.x, entity.y, "food")):
-                            dx = abs(self.x - entity.x)
-                            dy = abs(self.y - entity.y)
-                            if dx + dy == 1:  # Adjacent but not diagonal
-                                self.target = entity
-                                self.carrying_food = True
-                                self.color = (200, 150, 50)  # Brown while carrying
-                                break
-                            elif dx + dy <= 3:  # If nearby but not adjacent
-                                self.target = entity
-                                break
+                # Egg laying logic
+                elif (not self.sleeping and not self.eating and 
+                    not self.egg and self.mature and not self.has_laid_egg and
+                    self.happiness >= 70 and 
+                    self.energy >= 60 and    
+                    self.hunger >= 60):      
+                    
+                    if self.env.is_in_area(self.x, self.y, "nursery"):
+                        # Try to lay egg in adjacent spot
+                        adjacent_spots = [
+                            (self.x + dx, self.y + dy)
+                            for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]
+                            if (self.env.is_valid_position(self.x + dx, self.y + dy) and
+                                not self.env.is_position_occupied(self.x + dx, self.y + dy) and
+                                self.env.is_in_area(self.x + dx, self.y + dy, "nursery"))
+                        ]
+                        
+                        if adjacent_spots:
+                            egg_x, egg_y = random.choice(adjacent_spots)
+                            self.energy -= 50
+                            new_egg = Egg(egg_x, egg_y)
+                            self.env.eggs.append(new_egg)
+                            self.env.grid[(egg_x, egg_y)] = new_egg
+                            self.has_laid_egg = True
+                            self.target = None
+                    else:
+                        # Move towards nursery if ready to lay egg
+                        self.target = "nursery"
+                        self.color = (255, 200, 200)
 
                 # Energy and hunger updates
                 if random.random() < 0.5:
@@ -353,38 +348,6 @@ class Creature:
                 self.die()
 
             self.happiness = self.calculate_happiness()
-
-            # Egg laying logic - reduced thresholds and better conditions
-            if (not self.sleeping and not self.eating and 
-                not self.egg and self.mature and not self.has_laid_egg and
-                self.happiness >= 70 and  # Reduced from 90
-                self.energy >= 60 and     # Reduced from 90
-                self.hunger >= 60):       # Reduced from 90
-                
-                if self.env.is_in_area(self.x, self.y, "nursery"):
-                    # Try to lay egg in adjacent spot
-                    adjacent_spots = [
-                        (self.x + dx, self.y + dy)
-                        for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]
-                        if (self.env.is_valid_position(self.x + dx, self.y + dy) and
-                            not self.env.is_position_occupied(self.x + dx, self.y + dy) and
-                            self.env.is_in_area(self.x + dx, self.y + dy, "nursery"))
-                    ]
-                    
-                    if adjacent_spots:
-                        egg_x, egg_y = random.choice(adjacent_spots)
-                        self.energy -= 50  # Reduced energy cost from 90
-                        new_egg = Egg(egg_x, egg_y)
-                        self.env.eggs.append(new_egg)
-                        self.env.grid[(egg_x, egg_y)] = new_egg
-                        self.has_laid_egg = True
-                        self.target = None
-                else:
-                    # Move towards nursery if ready to lay egg
-                    self.target = "nursery"
-                    self.color = (255, 200, 200)  # Pink while ready to lay egg
-
-            # Update visual indicators
             self.update_visual_state()
 
     def update_visual_state(self):
@@ -552,13 +515,6 @@ class Environment:
                     self)  # Pass self here
         ]
         
-        # Add a dead creature at startup
-        dead_creature = Creature(random.randint(0, self.width-1),
-                               random.randint(0, self.height-1),
-                               self)
-        dead_creature.die()  # This sets dead=True and food_value=300
-        self.creatures.append(dead_creature)
-        
         self.eggs = []  # List to track eggs
         self.grid = {}  # Add a grid to track occupied positions
         # Add initial creatures to the grid
@@ -616,33 +572,26 @@ class Environment:
                 if (creature.x, creature.y) != (old_x, old_y):
                     self.grid.pop((old_x, old_y), None)
                     self.grid[(creature.x, creature.y)] = creature
+            else:
+                # Remove dead creatures with no food value
+                if creature.food_value <= 0:
+                    self.creatures_to_remove.append(creature)
         
-        # Handle colony organization
-        for creature in self.creatures:
-            if creature.dead and not self.is_in_area(creature.x, creature.y, "food"):
-                # Find nearby creature to move the dead one
-                for other in self.creatures:
-                    if (not other.dead and not other.carrying_food and 
-                        not other.target and
-                        abs(other.x - creature.x) + abs(other.y - creature.y) <= 2):
-                        other.target = creature
-                        other.carrying_food = True
-                        break
-                    
         # Update eggs
-        eggs_to_remove = []
-        for egg in self.eggs:
+        for egg in self.eggs[:]:  # Create a copy of the list to safely modify it
             egg.update()
             if egg.ready_to_hatch:
-                eggs_to_remove.append(egg)
-                if (egg.x, egg.y) in self.grid:
-                    self.grid.pop((egg.x, egg.y))
+                # Create new creature at egg's position
                 new_creature = Creature(egg.x, egg.y, self)
                 self.creatures.append(new_creature)
                 self.grid[(egg.x, egg.y)] = new_creature
-                
-        # Remove hatched eggs
-        self.eggs = [egg for egg in self.eggs if egg not in eggs_to_remove]
+                # Remove the hatched egg
+                self.eggs.remove(egg)
+                self.grid.pop((egg.x, egg.y), None)
+        
+        # Remove creatures marked for removal
+        self.creatures = [c for c in self.creatures if c not in self.creatures_to_remove]
+        self.creatures_to_remove.clear()
 
     def draw(self, screen):
         batch = pyglet.graphics.Batch()
