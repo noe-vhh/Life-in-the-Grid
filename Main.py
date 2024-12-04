@@ -472,43 +472,69 @@ Position: ({self.x}, {self.y})"""
 
     def draw(self, batch):
         """Draw the creature with additional indicators"""
-        # Add this method to the Creature class
         shapes = []
         
-        # Draw status ring if needed
-        if not self.dead and (self.hunger < 30 or self.energy < 30 or self.health < 30):
+        if self.dead:
+            # Draw food value indicator
+            food_percentage = self.food_value / 300  # 300 is max food value
+            
+            # Base circle (gray/red for dead)
             shapes.append(pyglet.shapes.Circle(
                 self.x * GRID_SIZE + GRID_SIZE // 2,
                 self.y * GRID_SIZE + GRID_SIZE // 2,
-                GRID_SIZE // 2 + 2,
-                color=(255, 0, 0),  # Red warning ring
+                GRID_SIZE // 2,
+                color=(100, 0, 0),  # Darker red for dead
                 batch=batch
             ))
+            
+            # Food remaining arc (green to yellow gradient based on amount)
+            if self.food_value > 0:
+                # Calculate color based on remaining food (green->yellow->red)
+                g = int(255 * food_percentage)
+                r = int(255 * (1 - food_percentage))
+                shapes.append(pyglet.shapes.Arc(
+                    self.x * GRID_SIZE + GRID_SIZE // 2,
+                    self.y * GRID_SIZE + GRID_SIZE // 2,
+                    GRID_SIZE // 3,  # Slightly smaller than main circle
+                    color=(r, g, 0),
+                    batch=batch,
+                    angle=food_percentage * 6.28319  # 2*pi for full circle
+                ))
+        else:
+            # Existing living creature drawing code
+            if self.hunger < 30 or self.energy < 30 or self.health < 30:
+                shapes.append(pyglet.shapes.Circle(
+                    self.x * GRID_SIZE + GRID_SIZE // 2,
+                    self.y * GRID_SIZE + GRID_SIZE // 2,
+                    GRID_SIZE // 2 + 2,
+                    color=(255, 0, 0),
+                    batch=batch
+                ))
 
-        # Draw main body
-        shapes.append(pyglet.shapes.Circle(
-            self.x * GRID_SIZE + GRID_SIZE // 2,
-            self.y * GRID_SIZE + GRID_SIZE // 2,
-            GRID_SIZE // 2,
-            color=self.color,
-            batch=batch
-        ))
-
-        # Draw age indicator (smaller circle inside)
-        if self.mature:
-            age_factor = self.age / self.max_age
-            age_color = (
-                int(255 * age_factor),  # More red as they age
-                int(255 * (1 - age_factor)),  # Less green as they age
-                0
-            )
+            # Main body
             shapes.append(pyglet.shapes.Circle(
                 self.x * GRID_SIZE + GRID_SIZE // 2,
                 self.y * GRID_SIZE + GRID_SIZE // 2,
-                GRID_SIZE // 4,  # Half the size of the main circle
-                color=age_color,
+                GRID_SIZE // 2,
+                color=self.color,
                 batch=batch
             ))
+
+            # Age indicator (smaller circle inside)
+            if self.mature:
+                age_factor = self.age / self.max_age
+                age_color = (
+                    int(255 * age_factor),
+                    int(255 * (1 - age_factor)),
+                    0
+                )
+                shapes.append(pyglet.shapes.Circle(
+                    self.x * GRID_SIZE + GRID_SIZE // 2,
+                    self.y * GRID_SIZE + GRID_SIZE // 2,
+                    GRID_SIZE // 4,
+                    color=age_color,
+                    batch=batch
+                ))
 
         return shapes
 
@@ -1119,7 +1145,8 @@ legend_labels = [
     # Group 1: Basic States
     ("Basic States", "header"),
     ("Normal Creature", (0, 255, 0)),
-    ("Dead", (255, 0, 0)),
+    ("Dead (with food remaining)", "dead_with_food"),
+    ("Dead (no food remaining)", (100, 0, 0)),
     ("Egg", (255, 200, 0)),
     
     # Group 2: Activities
@@ -1216,7 +1243,15 @@ def on_draw():
             
         # Draw indicators with refined positioning
         x_pos = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 20 + LEGEND_ICON_SIZE//2
-        if color == "ring":
+        if color == "dead_with_food":
+            # Draw base circle (dark red)
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2, color=(100, 0, 0)).draw()
+            # Draw food indicator arc (green)
+            pyglet.shapes.Arc(x_pos, y_offset, 
+                            LEGEND_ICON_SIZE//3, color=(0, 255, 0),
+                            angle=4.71239).draw()  # About 3/4 of a circle
+        elif color == "ring":
             pyglet.shapes.Circle(x_pos, y_offset, 
                                LEGEND_ICON_SIZE//2 + 2, color=(255, 0, 0)).draw()
             pyglet.shapes.Circle(x_pos, y_offset, 
