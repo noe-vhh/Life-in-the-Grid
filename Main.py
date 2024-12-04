@@ -158,7 +158,7 @@ class Creature:
     def move(self, max_x, max_y):
         if self.dead:
             return
-
+        
         target_x, target_y = self.x, self.y
         
         # Determine target position based on state
@@ -235,17 +235,41 @@ class Creature:
                     self.target = None
                 return
 
+            # Call move method for non-sleeping creatures
+            self.move(self.env.width, self.env.height)
+
             # Awake behavior
             if not self.sleeping:
-                self.move(self.env.width, self.env.height)
-                
-                # Reset states
+                # Reset eating state but NOT carrying_food state
                 self.eating = False
                 if not self.carrying_food:
                     self.color = (0, 255, 0)
 
-                # Priority 1: Eating when hungry
-                if self.hunger < 70:
+                # Priority 1: Complete carrying task if already carrying
+                if self.carrying_food and isinstance(self.target, Creature):
+                    if self.env.is_in_area(self.x, self.y, "food"):
+                        # Try to drop in food storage area
+                        adjacent_spots = [
+                            (self.x + dx, self.y + dy)
+                            for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]
+                            if (self.env.is_in_area(self.x + dx, self.y + dy, "food") and 
+                                not self.env.is_position_occupied(self.x + dx, self.y + dy))
+                        ]
+                        
+                        if adjacent_spots:
+                            drop_x, drop_y = random.choice(adjacent_spots)
+                            if self.env.move_entity(self.target, drop_x, drop_y):
+                                self.carrying_food = False
+                                self.target = None
+                                self.color = (0, 255, 0)
+                        return  # Return here to prevent further movement while dropping
+                    else:
+                        # Keep moving towards food storage
+                        self.target = "food"
+                        return  # Skip other behaviors while carrying
+
+                # Priority 2: Eating when hungry
+                elif self.hunger < 70:
                     nearby_entities = self.env.get_nearby_entities(self.x, self.y)
                     found_food = False
                     
@@ -268,7 +292,7 @@ class Creature:
                                 self.target = entity
                                 break
 
-                # Priority 2: Body transport when well-fed
+                # Priority 3: Body transport when well-fed
                 elif not self.carrying_food and self.hunger >= 70:
                     nearby_entities = self.env.get_nearby_entities(self.x, self.y)
                     for entity in nearby_entities:
@@ -285,44 +309,10 @@ class Creature:
                                 self.target = entity
                                 break
 
-                # Handle carrying and dropping food
-                if self.carrying_food and isinstance(self.target, Creature):
-                    if self.env.is_in_area(self.x, self.y, "food"):
-                        # Try to drop in food storage area
-                        adjacent_spots = [
-                            (self.x + dx, self.y + dy)
-                            for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]
-                            if (self.env.is_in_area(self.x + dx, self.y + dy, "food") and 
-                                not self.env.is_position_occupied(self.x + dx, self.y + dy))
-                        ]
-                        
-                        if adjacent_spots:
-                            drop_x, drop_y = random.choice(adjacent_spots)
-                            if self.env.move_entity(self.target, drop_x, drop_y):
-                                self.carrying_food = False
-                                self.target = None
-                                self.color = (0, 255, 0)
-                    else:
-                        # Move the dead creature along with us
-                        dead_creature = self.target
-                        # Try to move dead creature to an adjacent spot
-                        adjacent_spots = [
-                            (self.x + dx, self.y + dy)
-                            for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]
-                            if not self.env.is_position_occupied(self.x + dx, self.y + dy)
-                        ]
-                        
-                        if adjacent_spots:
-                            new_x, new_y = random.choice(adjacent_spots)
-                            self.env.move_entity(dead_creature, new_x, new_y)
-                        
-                        # Keep moving towards food storage
-                        self.target = "food"
-
                 # Energy and hunger updates
                 if random.random() < 0.5:
                     self.hunger = max(0, self.hunger - 1)
-                energy_cost = 2 if self.eating else 1
+                energy_cost = 2 if self.eating or self.carrying_food else 1
                 self.energy = max(0, self.energy - energy_cost)
 
             # Health reduction from hunger
@@ -499,6 +489,7 @@ class Environment:
 
     def update(self, dt):
         """Update the environment, including moving creatures and handling interactions."""
+        
         # Clear and rebuild grid at the start of update
         self.grid.clear()
         for creature in self.creatures:
@@ -755,39 +746,86 @@ class Environment:
         """Try to move entity towards target, handling collisions"""
         if entity.dead:
             return False
-        
+
+        # Calculate movement towards target
         dx = target_x - entity.x
         dy = target_y - entity.y
         
         # If already at target, no need to move
         if dx == 0 and dy == 0:
             return True
-        
-        # Calculate movement direction
+
+        # Calculate movement direction (ensure we move at least one step)
         move_x = 0 if dx == 0 else dx // abs(dx)
         move_y = 0 if dy == 0 else dy // abs(dy)
-        
-        # Try primary movement direction first
+
+        # If carrying a dead creature, try to move it even if we can't get all the way
+        if entity.carrying_food and isinstance(entity.target, Creature):
+            
+            # Calculate new positions
+            new_carrier_x = entity.x + move_x
+            new_carrier_y = entity.y + move_y
+            
+            # Try to move carrier first
+            if not self.is_position_occupied(new_carrier_x, new_carrier_y):
+                
+                # Remove carrier from current position
+                self.grid.pop((entity.x, entity.y), None)
+                
+                # Try to find any position for the dead body that's closer to the target
+                possible_body_positions = [
+                    (new_carrier_x + dx, new_carrier_y + dy)
+                    for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]
+                ]
+                
+                
+                # Sort by distance to target
+                possible_body_positions.sort(key=lambda pos: 
+                    abs(pos[0] - target_x) + abs(pos[1] - target_y))
+                
+                # Try each position, accepting any that's valid
+                for new_body_x, new_body_y in possible_body_positions:
+                    if (self.is_valid_position(new_body_x, new_body_y) and 
+                        not self.is_position_occupied(new_body_x, new_body_y)):
+                        
+                        # Move carrier
+                        entity.x = new_carrier_x
+                        entity.y = new_carrier_y
+                        self.grid[(new_carrier_x, new_carrier_y)] = entity
+                        
+                        # Move body
+                        self.grid.pop((entity.target.x, entity.target.y), None)
+                        entity.target.x = new_body_x
+                        entity.target.y = new_body_y
+                        self.grid[(new_body_x, new_body_y)] = entity.target
+                        return True
+                
+                # If we couldn't move the body, at least try to move the carrier
+                if not self.is_position_occupied(new_carrier_x, new_carrier_y):
+                    entity.x = new_carrier_x
+                    entity.y = new_carrier_y
+                    self.grid[(new_carrier_x, new_carrier_y)] = entity
+                    return True
+                else:
+                    # Restore carrier to original position if we couldn't move
+                    self.grid[(entity.x, entity.y)] = entity
+            
+            return False
+
+        # Normal movement for non-carrying entities
+        moved = False
         if abs(dx) > abs(dy):
-            # Try horizontal movement first
             if not self.is_position_occupied(entity.x + move_x, entity.y):
-                return self.move_entity(entity, entity.x + move_x, entity.y)
-            # Then try vertical
-            elif not self.is_position_occupied(entity.x, entity.y + move_y):
-                return self.move_entity(entity, entity.x, entity.y + move_y)
+                moved = self.move_entity(entity, entity.x + move_x, entity.y)
+            elif not moved and dy != 0 and not self.is_position_occupied(entity.x, entity.y + move_y):
+                moved = self.move_entity(entity, entity.x, entity.y + move_y)
         else:
-            # Try vertical movement first
             if not self.is_position_occupied(entity.x, entity.y + move_y):
-                return self.move_entity(entity, entity.x, entity.y + move_y)
-            # Then try horizontal
-            elif not self.is_position_occupied(entity.x + move_x, entity.y):
-                return self.move_entity(entity, entity.x + move_x, entity.y)
-        
-        # If primary movements failed, try diagonal
-        if not self.is_position_occupied(entity.x + move_x, entity.y + move_y):
-            return self.move_entity(entity, entity.x + move_x, entity.y + move_y)
-        
-        return False
+                moved = self.move_entity(entity, entity.x, entity.y + move_y)
+            elif not moved and dx != 0 and not self.is_position_occupied(entity.x + move_x, entity.y):
+                moved = self.move_entity(entity, entity.x + move_x, entity.y)
+
+        return moved
 
     def try_move_dead_creature(self, carrier, dead_creature):
         """Try to move a dead creature towards food storage"""
