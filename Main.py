@@ -71,6 +71,11 @@ ANTENNA_SPACING = 6  # Space between antenna bases
 ANTENNA_WAVE_SPEED = 0.25  # Speed of antenna movement
 ANTENNA_WAVE_AMOUNT = 0.5  # How much the antennae wave (in radians)
 
+# Add these constants near other animation constants
+BREATH_SPEED = 0.1  # Even slower breathing animation
+BREATH_AMOUNT = 0.1  # Increased from 0.08 to 0.15 (15% of size)
+DEAD_BREATH_AMOUNT = 0.08  # Increased from 0.04 to 0.08 (8% of size)
+
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -269,6 +274,9 @@ class Creature:
         # Add eye animation properties
         self.blink_timer = random.uniform(0, BLINK_INTERVAL)
         self.is_blinking = False
+        
+        # Add breathing animation property
+        self.breath_offset = random.uniform(0, 2 * math.pi)  # Random starting phase
         
     def calculate_happiness(self):
         """Calculate creature happiness based on various factors"""
@@ -659,11 +667,19 @@ Position: ({self.x}, {self.y})"""
         center_y = self.y * GRID_SIZE + GRID_SIZE // 2
         base_radius = GRID_SIZE // 2
 
+        # Calculate breathing effect
+        breath_amount = DEAD_BREATH_AMOUNT if self.dead else BREATH_AMOUNT
+        # Use a smaller multiplier for the animation timer to slow down the breathing
+        breath_scale = 1.0 + math.sin(self.animation_timer * BREATH_SPEED * math.pi + self.breath_offset) * breath_amount
+
+        # Apply breathing to base_radius
+        current_radius = base_radius * breath_scale
+
         # 1. Selection indicator (white ring, outermost)
         if self.selected:
             shapes.append(pyglet.shapes.Circle(
                 center_x, center_y,
-                base_radius + SELECTION_RING_SIZE,
+                current_radius + SELECTION_RING_SIZE,  # Apply breathing to selection ring
                 color=(255, 255, 255, 180),
                 batch=batch
             ))
@@ -672,7 +688,7 @@ Position: ({self.x}, {self.y})"""
         if not self.dead and (self.hunger < 30 or self.energy < 30 or self.health < 30):
             shapes.append(pyglet.shapes.Circle(
                 center_x, center_y,
-                base_radius + STATUS_RING_SIZE,
+                current_radius + STATUS_RING_SIZE,  # Apply breathing to status ring
                 color=(255, 0, 0, 200),
                 batch=batch
             ))
@@ -682,7 +698,7 @@ Position: ({self.x}, {self.y})"""
             # Base circle for dead creature
             shapes.append(pyglet.shapes.Circle(
                 center_x, center_y,
-                base_radius,
+                current_radius,  # Apply breathing
                 color=(100, 0, 0),  # Dark red base
                 batch=batch
             ))
@@ -692,7 +708,7 @@ Position: ({self.x}, {self.y})"""
                 food_percentage = self.food_value / 200
                 shapes.append(pyglet.shapes.Arc(
                     center_x, center_y,
-                    base_radius * 0.8,  # Slightly smaller than main body
+                    current_radius * 0.8,  # Apply breathing to food indicator
                     color=(0, 255, 0),
                     batch=batch,
                     angle=food_percentage * 6.28319  # 2*pi for full circle
@@ -701,7 +717,7 @@ Position: ({self.x}, {self.y})"""
             # Living creature main body
             shapes.append(pyglet.shapes.Circle(
                 center_x, center_y,
-                base_radius,
+                current_radius,  # Apply breathing
                 color=self.color,
                 batch=batch
             ))
@@ -709,7 +725,7 @@ Position: ({self.x}, {self.y})"""
             # 4. Age indicator (inner circle)
             if self.mature:
                 age_factor = self.age / self.max_age
-                inner_radius = base_radius * INNER_CIRCLE_RATIO
+                inner_radius = current_radius * INNER_CIRCLE_RATIO  # Apply breathing to inner circle
                 
                 # Color transitions from green to yellow to red with age
                 if age_factor < 0.5:
@@ -999,56 +1015,57 @@ Position: ({self.x}, {self.y})"""
                         )
     
         # Draw antennae
-        if not self.dead:  # Only living creatures have antennae
-            # Calculate base positions for antennae
-            antenna_base_y = center_y + base_radius - 2  # Slightly below top of head
-            left_base_x = center_x - ANTENNA_SPACING // 2
-            right_base_x = center_x + ANTENNA_SPACING // 2
-            
-            # Calculate wave effect
-            wave = math.sin(self.animation_timer * ANTENNA_WAVE_SPEED) * ANTENNA_WAVE_AMOUNT
-            # Add extra wave when moving or targeting
-            if self.target or self.carrying_food:
-                wave *= 1.5  # More movement when active
-            
-            # Draw left antenna
-            left_tip_x = left_base_x - math.sin(wave) * ANTENNA_LENGTH
-            left_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
-            shapes.append(pyglet.shapes.Line(
-                left_base_x, antenna_base_y,
+        # Remove the condition that checks if the creature is dead
+        # Only living creatures have antennae
+        # Calculate base positions for antennae
+        antenna_base_y = center_y + base_radius - 2  # Slightly below top of head
+        left_base_x = center_x - ANTENNA_SPACING // 2
+        right_base_x = center_x + ANTENNA_SPACING // 2
+
+        # Calculate wave effect
+        wave = math.sin(self.animation_timer * ANTENNA_WAVE_SPEED) * ANTENNA_WAVE_AMOUNT
+        # Add extra wave when moving or targeting
+        if self.target or self.carrying_food:
+            wave *= 1.5  # More movement when active
+
+        # Draw left antenna
+        left_tip_x = left_base_x - math.sin(wave) * ANTENNA_LENGTH
+        left_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
+        shapes.append(pyglet.shapes.Line(
+            left_base_x, antenna_base_y,
+            left_tip_x, left_tip_y,
+            width=ANTENNA_WIDTH,
+            color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+            batch=batch
+        ))
+
+        # Draw right antenna
+        right_tip_x = right_base_x + math.sin(wave) * ANTENNA_LENGTH
+        right_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
+        shapes.append(pyglet.shapes.Line(
+            right_base_x, antenna_base_y,
+            right_tip_x, right_tip_y,
+            width=ANTENNA_WIDTH,
+            color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+            batch=batch
+        ))
+
+        # Draw small dots at antenna tips
+        tip_size = ANTENNA_WIDTH // 2
+        shapes.extend([
+            pyglet.shapes.Circle(
                 left_tip_x, left_tip_y,
-                width=ANTENNA_WIDTH,
+                tip_size,
                 color=self.color if not isinstance(self.color, str) else (0, 255, 0),
                 batch=batch
-            ))
-            
-            # Draw right antenna
-            right_tip_x = right_base_x + math.sin(wave) * ANTENNA_LENGTH
-            right_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
-            shapes.append(pyglet.shapes.Line(
-                right_base_x, antenna_base_y,
+            ),
+            pyglet.shapes.Circle(
                 right_tip_x, right_tip_y,
-                width=ANTENNA_WIDTH,
+                tip_size,
                 color=self.color if not isinstance(self.color, str) else (0, 255, 0),
                 batch=batch
-            ))
-            
-            # Draw small dots at antenna tips
-            tip_size = ANTENNA_WIDTH // 2
-            shapes.extend([
-                pyglet.shapes.Circle(
-                    left_tip_x, left_tip_y,
-                    tip_size,
-                    color=self.color if not isinstance(self.color, str) else (0, 255, 0),
-                    batch=batch
-                ),
-                pyglet.shapes.Circle(
-                    right_tip_x, right_tip_y,
-                    tip_size,
-                    color=self.color if not isinstance(self.color, str) else (0, 255, 0),
-                    batch=batch
-                )
-            ])
+            )
+        ])
 
         return shapes
 
