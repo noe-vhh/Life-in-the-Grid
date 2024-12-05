@@ -458,8 +458,23 @@ class Creature:
                                     self.carrying_food = False
                                     break
                 
-                # If we didn't find adjacent food to eat, look for dead creatures to move
-                if not found_food and not self.carrying_food:
+            # If we didn't find adjacent food to eat, look for dead creatures to move
+            if not found_food:
+                found_dead_creature = False
+                
+                # First check if we're currently carrying a dead creature
+                if self.carrying_food and isinstance(self.target, Creature):
+                    # Check if we're still adjacent to our target
+                    if abs(self.x - self.target.x) + abs(self.y - self.target.y) == 1:
+                        found_dead_creature = True
+                    else:
+                        # Lost contact with the dead creature we were carrying
+                        self.carrying_food = False
+                        self.target = None
+                        self.color = (0, 255, 0)  # Reset color
+                
+                # Only look for new dead creatures if we're not already carrying one
+                if not self.carrying_food:
                     for entity in nearby_entities:
                         if (isinstance(entity, Creature) and 
                             entity.dead and 
@@ -471,13 +486,14 @@ class Creature:
                                 self.target = entity
                                 self.carrying_food = True
                                 self.color = (200, 150, 50)  # Brown while carrying
+                                found_dead_creature = True
                                 break
-
-            # Reset carrying_food state if in food storage area
-            if self.carrying_food and self.env.is_in_area(self.x, self.y, "food"):
-                self.carrying_food = False
-                self.target = None
-                self.color = (0, 255, 0)  # Reset color
+                
+                # Reset carrying_food if no dead creature is found nearby
+                if not found_dead_creature and self.carrying_food:
+                    self.carrying_food = False
+                    self.target = None
+                    self.color = (0, 255, 0)  # Reset color
 
             # Update happiness and visual state at the end
             self.happiness = self.calculate_happiness()
