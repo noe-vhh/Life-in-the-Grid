@@ -1,12 +1,88 @@
-UI fixes and improvements
-Github readme etc
-Better egg sprite
-Modular code
-no spawn behind side panel 
-creature select ring
-info panel icons
-unselect egg on hatch
-multiple eggs, slower hatch speed
-creature color indication improvements
-eating indiation 
-hatch progress indicator
+# Core Gameplay Improvements
+
+## High Priority UI
+- [ ] Fix spawn location (prevent behind side panel)
+- [ ] Creature selection ring
+- [ ] Info panel icons
+- [ ] Unselect egg on hatch
+- [ ] Hatch progress indicator
+- [ ] Improved creature color indicators
+- [ ] Eating indication
+
+## Creature Visualization
+- [ ] Better egg sprite
+- [ ] Selection ring improvements
+  - Pulsing/animated selection ring
+  - Different colors for creatures vs eggs
+- [ ] Status indicators
+  - Health/energy/hunger bars on side panel
+  - Icons for current state (sleeping, hungry, etc.)
+  - Visual trails for movement paths
+  - Color gradients for age progression
+  - Particle effects (eating/sleeping)
+
+## Info Panel Enhancement
+- [ ] Current goal/target display
+- [ ] Stat tooltips
+- [ ] Mini-map for colony overview
+
+# Advanced Features
+
+## Egg System
+- [ ] Multiple eggs implementation
+  - Different egg types with traits
+  - Slower hatch speed
+  - Incubation requirements
+  - Genetic trait inheritance
+  - Egg clustering bonuses
+  - Protection mechanics
+
+## Colony Management
+- [ ] Resource system
+- [ ] Territory expansion
+- [ ] Specialized roles
+  - Guards
+  - Nurses
+  - Foragers
+- [ ] Disease/infection system
+- [ ] Weather effects
+
+## Environment
+- [ ] Terrain types affecting movement
+- [ ] Day/night cycle
+- [ ] Seasonal changes
+- [ ] Predator/prey relationships
+- [ ] Plant growth and harvesting
+
+## AI & Behavior
+- [ ] Creature personalities
+- [ ] State machine for behavior
+- [ ] Event system for interactions
+
+# Technical Improvements
+
+## Code Architecture
+- [ ] Modular code structure
+- [ ] Split into multiple files
+  - Creatures
+  - UI
+  - Environment
+- [ ] Config file for constants
+- [ ] Better spatial partitioning
+
+## Performance Optimization
+- [ ] Batch rendering
+- [ ] Pathfinding optimization
+- [ ] Improved collision detection
+- [ ] Multi-threading support
+- [ ] LOD system
+
+## Save System
+- [ ] Colony state saving
+- [ ] Genetics export/import
+- [ ] Statistics tracking
+- [ ] Achievement system
+- [ ] Scenario editor
+
+## Documentation
+- [ ] GitHub readme
