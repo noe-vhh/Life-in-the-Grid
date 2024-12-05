@@ -1,32 +1,20 @@
-## Critical Fixes
+- [ ] Improved creature color indicators
+
 - [ ] Unselect egg on hatch
-- [ ] Basic creature balance
-- [ ] Sleep colour only when sleeping
-- [ ] Lose health while sleeping
-- [ ] Alive must move dead.
+- [ ] Hatch progress indicator
+- [ ] Better egg sprite
 
 ## Essential UI
-- [ ] Creature selection ring
 - [ ] Info panel icons
-- [ ] Hatch progress indicator
-- [ ] Basic status indicators
 
 ## Basic Visualization
-- [ ] Better egg sprite
-- [ ] Selection ring improvements
-  - Pulsing/animated selection ring
-  - Different colors for creatures vs eggs
 - [ ] Basic status indicators
   - Health/energy bars
   - Current state icon
+  - [ ] Eating indication
+- [ ] Particle effects (eating/sleeping)
 
 # Mid-Term Goals
-
-## Enhanced Gameplay
-- [ ] Improved creature color indicators
-- [ ] Eating indication
-- [ ] Visual trails for movement paths
-- [ ] Particle effects (eating/sleeping)
 
 ## Colony Management
 - [ ] Basic resource system

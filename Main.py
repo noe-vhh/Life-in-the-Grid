@@ -570,6 +570,16 @@ Position: ({self.x}, {self.y})"""
         """Draw the creature with additional indicators"""
         shapes = []
         
+        # Add selection indicator (white border) if selected
+        if hasattr(self, 'selected') and self.selected:
+            shapes.append(pyglet.shapes.Circle(
+                self.x * GRID_SIZE + GRID_SIZE // 2,
+                self.y * GRID_SIZE + GRID_SIZE // 2,
+                GRID_SIZE // 2 + 4,  # Make border larger than critical status ring
+                color=(255, 255, 255, 128),  # Semi-transparent white
+                batch=batch
+            ))
+
         if self.dead:
             # Draw food value indicator
             food_percentage = self.food_value / 300  # 300 is max food value
@@ -1143,6 +1153,31 @@ class Egg:
 
     def __str__(self):
         return f"Egg Timer: {min(self.timer, 100)}"
+
+    def draw(self, batch):
+        """Draw the egg with selection indicator if selected"""
+        shapes = []
+
+        # Add selection indicator (white border) if selected
+        if self.selected:
+            shapes.append(pyglet.shapes.Circle(
+                self.x * GRID_SIZE + GRID_SIZE // 2,
+                self.y * GRID_SIZE + GRID_SIZE // 2,
+                (GRID_SIZE // 3) + 4,  # Make border larger than the egg
+                color=(255, 255, 255, 128),  # Semi-transparent white
+                batch=batch
+            ))
+
+        # Draw the egg
+        shapes.append(pyglet.shapes.Circle(
+            self.x * GRID_SIZE + GRID_SIZE // 2,
+            self.y * GRID_SIZE + GRID_SIZE // 2,
+            GRID_SIZE // 3,
+            color=(255, 200, 0),
+            batch=batch
+        ))
+
+        return shapes
 
 # Handle mouse clicks
 selected_creature = None  # No creature is selected initially
