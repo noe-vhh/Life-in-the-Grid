@@ -285,6 +285,8 @@ class Creature:
         elif self.target == "food":
             # First check if there's food adjacent to eat
             nearby_entities = self.env.get_nearby_entities(self.x, self.y)
+            # Sort dead creatures by remaining food value (ascending)
+            nearby_entities.sort(key=lambda e: e.food_value if isinstance(e, Creature) and e.dead else float('inf'))
             for entity in nearby_entities:
                 if isinstance(entity, Creature) and entity.dead and entity.food_value > 0:
                     dx = abs(self.x - entity.x)
@@ -554,7 +556,7 @@ class Creature:
         self.dead = True
         self.color = (255, 0, 0)  # Red color for dead creatures
         self.health = 0
-        self.food_value = 300  # Doubled from 100 to 200 - dead creatures provide more food
+        self.food_value = 200  # Doubled from 100 to 200 - dead creatures provide more food
         
         # Determine cause of death
         if self.age >= self.max_age:
