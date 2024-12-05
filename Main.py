@@ -570,7 +570,7 @@ class Creature:
         if self.dead:
             return f"""DEAD CREATURE
 Cause: {self.death_cause}
-Remaining Food: {self.food_value}%
+Remaining Food: {self.food_value/2}%
 Position: ({self.x}, {self.y})"""
         else:
             status = []
@@ -653,7 +653,7 @@ Position: ({self.x}, {self.y})"""
             
             # Food value indicator (arc)
             if self.food_value > 0:
-                food_percentage = self.food_value / 300
+                food_percentage = self.food_value / 200
                 shapes.append(pyglet.shapes.Arc(
                     center_x, center_y,
                     base_radius * 0.8,  # Slightly smaller than main body
