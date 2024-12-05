@@ -5,13 +5,9 @@
 - [ ] Multiple eggs per creature
 
 ## Essential UI
-- [ ] Info panel icons
-
-## Basic Visualization
-- [ ] Basic status indicators
-  - Health/energy bars
-  - Current state icon
-  - [ ] Eating indication
+- [ ] Info panel
+- Current state icon
+- [ ] Eating indication
 - [ ] Particle effects (eating/sleeping)
 
 # Mid-Term Goals

@@ -113,14 +113,14 @@ class Slider:
 window = pyglet.window.Window(WIDTH, HEIGHT, "Creature Simulation", resizable=False)
 
 # Load images for buttons
-pause_unclicked_image = pyglet.resource.image('Assets/icons/pause-play-unclick.png')
-pause_clicked_image = pyglet.resource.image('Assets/icons/pause-play-click.png')
+pause_unclicked_image = pyglet.resource.image('Assets/UI Icons/pause-play-unclick.png')
+pause_clicked_image = pyglet.resource.image('Assets/UI Icons/pause-play-click.png')
 
-play_unclicked_image = pyglet.resource.image('Assets/icons/play-button-unclick.png')
-play_clicked_image = pyglet.resource.image('Assets/icons/play-button-click.png')
+play_unclicked_image = pyglet.resource.image('Assets/UI Icons/play-button-unclick.png')
+play_clicked_image = pyglet.resource.image('Assets/UI Icons/play-button-click.png')
 
-fast_forward_unclicked_image = pyglet.resource.image('Assets/icons/fast-forward-button-unclick.png')
-fast_forward_clicked_image = pyglet.resource.image('Assets/icons/fast-forward-button-click.png')
+fast_forward_unclicked_image = pyglet.resource.image('Assets/UI Icons/fast-forward-button-unclick.png')
+fast_forward_clicked_image = pyglet.resource.image('Assets/UI Icons/fast-forward-button-click.png')
 
 # Create sprites for buttons with scaling
 icon_scale = 0.075  # Adjusted scale factor
