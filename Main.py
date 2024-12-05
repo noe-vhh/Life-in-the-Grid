@@ -73,7 +73,7 @@ ANTENNA_WAVE_AMOUNT = 0.5  # How much the antennae wave (in radians)
 
 # Add these constants near other animation constants
 BREATH_SPEED = 0.1  # Even slower breathing animation
-BREATH_AMOUNT = 0.1  # Increased from 0.08 to 0.15 (15% of size)
+BREATH_AMOUNT = 0.05  # Increased from 0.08 to 0.15 (15% of size)
 DEAD_BREATH_AMOUNT = 0.08  # Increased from 0.04 to 0.08 (8% of size)
 
 # Create a simple rectangle class for panel sections
