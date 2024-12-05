@@ -53,6 +53,13 @@ EGG_PULSE_SPEED = 2.0  # Speed of the pulsing animation
 EGG_INNER_RATIO = 0.7  # Size of the inner egg shape
 EGG_SHINE_OFFSET = 0.3  # Offset for the shine effect
 
+# Add these constants near other animation constants
+BLINK_INTERVAL = 5  # Every ~5 frames at normal speed
+BLINK_DURATION = 1  # Blink for 1 frame
+EYE_SIZE = 3  # Size of the eyes
+EYE_SPACING = 6  # Distance between eyes
+EYE_OFFSET_Y = 2  # Vertical offset from center
+
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -248,6 +255,10 @@ class Creature:
         self.animation_timer = 0
         self.animation_frame = 0
         
+        # Add eye animation properties
+        self.blink_timer = random.uniform(0, BLINK_INTERVAL)
+        self.is_blinking = False
+        
     def calculate_happiness(self):
         """Calculate creature happiness based on various factors"""
         happiness = 100
@@ -340,6 +351,8 @@ class Creature:
         if self.dead:
             return
 
+        self.update_eyes()  # Add this line near the start
+        
         # Always update basic stats first
         self.age += 1
         if self.age >= 20:
@@ -873,7 +886,94 @@ Position: ({self.x}, {self.y})"""
                 )
                 heart_label.draw()
 
+        # Add eyes after the main creature body is drawn
+        if not isinstance(self.color, str):  # Make sure we have a valid color
+            center_x = self.x * GRID_SIZE + GRID_SIZE // 2
+            center_y = self.y * GRID_SIZE + GRID_SIZE // 2
+            base_radius = GRID_SIZE // 2
+            
+            # Calculate eye positions
+            left_eye_x = center_x - EYE_SPACING
+            right_eye_x = center_x + EYE_SPACING
+            eye_y = center_y + EYE_OFFSET_Y
+            
+            if self.dead:
+                # Draw X eyes for dead creatures
+                for eye_x in [left_eye_x, right_eye_x]:
+                    # Draw X lines
+                    shapes.extend([
+                        pyglet.shapes.Line(
+                            eye_x - EYE_SIZE, eye_y + EYE_SIZE,
+                            eye_x + EYE_SIZE, eye_y - EYE_SIZE,
+                            color=(0, 0, 0),
+                            batch=batch,
+                            width=2
+                        ),
+                        pyglet.shapes.Line(
+                            eye_x - EYE_SIZE, eye_y - EYE_SIZE,
+                            eye_x + EYE_SIZE, eye_y + EYE_SIZE,
+                            color=(0, 0, 0),
+                            batch=batch,
+                            width=2
+                        )
+                    ])
+            else:
+                # Draw normal eyes
+                for eye_x in [left_eye_x, right_eye_x]:
+                    if self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping"):
+                        # Draw closed eyes (horizontal lines) only when actually sleeping in the sleeping area
+                        shapes.append(
+                            pyglet.shapes.Line(
+                                eye_x - EYE_SIZE, eye_y,
+                                eye_x + EYE_SIZE, eye_y,
+                                color=(0, 0, 0),
+                                batch=batch,
+                                width=2
+                            )
+                        )
+                    elif self.is_blinking:
+                        # Draw blinking eyes (shorter horizontal lines, similar to sleeping)
+                        shapes.append(
+                            pyglet.shapes.Line(
+                                eye_x - EYE_SIZE, eye_y,
+                                eye_x + EYE_SIZE, eye_y,
+                                color=(0, 0, 0),
+                                batch=batch,
+                                width=2
+                            )
+                        )
+                    else:
+                        # Draw open eyes (white background with black pupil)
+                        shapes.append(
+                            pyglet.shapes.Circle(
+                                eye_x, eye_y,
+                                EYE_SIZE + 2,  # Larger white area
+                                color=(255, 255, 255),
+                                batch=batch
+                            )
+                        )
+                        shapes.append(
+                            pyglet.shapes.Circle(
+                                eye_x, eye_y,
+                                EYE_SIZE,  # Pupil size
+                                color=(0, 0, 0),
+                                batch=batch
+                            )
+                        )
+    
         return shapes
+
+    def update_eyes(self):
+        """Update eye animation state"""
+        if not self.dead and not (self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping")):
+            self.blink_timer -= 1  # Decrement by 1 frame instead of 1/60
+            if self.blink_timer <= 0:
+                if not self.is_blinking:
+                    self.is_blinking = True
+                    self.blink_timer = BLINK_DURATION
+                else:
+                    self.is_blinking = False
+                    self.blink_timer = BLINK_INTERVAL + random.randint(-2, 2)  # Add some randomness
 
 # The environment where creatures live
 class Environment:
@@ -1372,8 +1472,9 @@ class Egg:
     def update(self):
         """Increment the egg's timer and check if ready to hatch."""
         if self.timer < self.hatch_time:
-            self.timer += 0.5  # Reduced from 1 to 0.5 for slower progression
-        if self.timer >= self.hatch_time:
+            self.timer += 1  # Increment by 1 per frame
+        
+        if self.timer >= self.hatch_time and not self.ready_to_hatch:
             # Reset egg laying status for all nearby creatures
             nearby_creatures = [
                 creature for creature in self.env.creatures
@@ -1385,7 +1486,9 @@ class Egg:
             self.ready_to_hatch = True
 
     def __str__(self):
-        return f"Egg Timer: {min(int((self.timer/self.hatch_time) * 100), 100)}%"
+        """Return the egg's incubation progress as a percentage, capped at 100%"""
+        progress = min(100, int((self.timer/300) * 100))
+        return f"Egg Timer: {progress}%"
 
     def draw(self, batch):
         """Draw the egg with improved visuals and animations"""
@@ -1397,7 +1500,7 @@ class Egg:
         base_radius = GRID_SIZE // 3
         
         # Calculate pulse effect
-        pulse = math.sin(self.timer * EGG_PULSE_SPEED * math.pi / 100) * 0.1
+        pulse = math.sin(self.timer * EGG_PULSE_SPEED * math.pi / 300) * 0.1
         current_radius = base_radius * (1 + pulse)
         
         # Selection indicator (if selected)
@@ -1437,7 +1540,7 @@ class Egg:
         
         # Progress indicator (arc around the egg)
         if self.timer > 0:
-            progress = min(self.timer / 100, 1.0)
+            progress = min(self.timer / 300, 1.0)
             shapes.append(pyglet.shapes.Arc(
                 center_x, center_y,
                 current_radius + 2,
@@ -1570,7 +1673,7 @@ def update_stats():
     if selected_creature:
         stats_label.text = format_stats(selected_creature)
     elif selected_egg:
-        stats_label.text = f"Selected Egg:\nIncubation: {selected_egg.timer}%\nPosition: ({selected_egg.x}, {selected_egg.y})"
+        stats_label.text = f"Selected Egg:\nIncubation: {int((selected_egg.timer/300) * 100)}%\nPosition: ({selected_egg.x}, {selected_egg.y})"
     else:
         stats_label.text = "No creature or egg selected"
 
