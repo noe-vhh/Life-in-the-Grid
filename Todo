@@ -1,8 +1,8 @@
-- [ ] Improved creature color indicators
-
 - [ ] Unselect egg on hatch
 - [ ] Hatch progress indicator
 - [ ] Better egg sprite
+- [ ] Slower hatching speed
+- [ ] Multiple eggs per creature
 
 ## Essential UI
 - [ ] Info panel icons

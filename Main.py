@@ -195,6 +195,12 @@ fps_input_active = False
 # Add this near the top with other global variables
 current_speed_state = "pause"  # Start paused
 
+# Update Constants section - add new indicator constants
+INDICATOR_BORDER_WIDTH = 2
+SELECTION_RING_SIZE = 4
+STATUS_RING_SIZE = 2
+INNER_CIRCLE_RATIO = 0.6  # Size of inner circle relative to main body
+
 class Creature:
     def __init__(self, x, y, environment, health=100, energy=100):
         # Initialize all attributes first
@@ -567,78 +573,78 @@ Position: ({self.x}, {self.y})"""
         return False
 
     def draw(self, batch):
-        """Draw the creature with additional indicators"""
+        """Draw the creature with improved indicators"""
         shapes = []
-        
-        # Add selection indicator (white border) if selected
-        if hasattr(self, 'selected') and self.selected:
+        center_x = self.x * GRID_SIZE + GRID_SIZE // 2
+        center_y = self.y * GRID_SIZE + GRID_SIZE // 2
+        base_radius = GRID_SIZE // 2
+
+        # 1. Selection indicator (white ring, outermost)
+        if self.selected:
             shapes.append(pyglet.shapes.Circle(
-                self.x * GRID_SIZE + GRID_SIZE // 2,
-                self.y * GRID_SIZE + GRID_SIZE // 2,
-                GRID_SIZE // 2 + 4,  # Make border larger than critical status ring
-                color=(255, 255, 255, 128),  # Semi-transparent white
+                center_x, center_y,
+                base_radius + SELECTION_RING_SIZE,
+                color=(255, 255, 255, 180),
                 batch=batch
             ))
 
-        if self.dead:
-            # Draw food value indicator
-            food_percentage = self.food_value / 300  # 300 is max food value
-            
-            # Base circle (gray/red for dead)
+        # 2. Critical status indicator (red ring)
+        if not self.dead and (self.hunger < 30 or self.energy < 30 or self.health < 30):
             shapes.append(pyglet.shapes.Circle(
-                self.x * GRID_SIZE + GRID_SIZE // 2,
-                self.y * GRID_SIZE + GRID_SIZE // 2,
-                GRID_SIZE // 2,
-                color=(100, 0, 0),  # Darker red for dead
+                center_x, center_y,
+                base_radius + STATUS_RING_SIZE,
+                color=(255, 0, 0, 200),
+                batch=batch
+            ))
+
+        # 3. Main body
+        if self.dead:
+            # Base circle for dead creature
+            shapes.append(pyglet.shapes.Circle(
+                center_x, center_y,
+                base_radius,
+                color=(100, 0, 0),  # Dark red base
                 batch=batch
             ))
             
-            # Food remaining arc (green to yellow gradient based on amount)
+            # Food value indicator (arc)
             if self.food_value > 0:
-                # Calculate color based on remaining food (green->yellow->red)
-                g = int(255 * food_percentage)
-                r = int(255 * (1 - food_percentage))
+                food_percentage = self.food_value / 300
                 shapes.append(pyglet.shapes.Arc(
-                    self.x * GRID_SIZE + GRID_SIZE // 2,
-                    self.y * GRID_SIZE + GRID_SIZE // 2,
-                    GRID_SIZE // 3,  # Slightly smaller than main circle
-                    color=(r, g, 0),
+                    center_x, center_y,
+                    base_radius * 0.8,  # Slightly smaller than main body
+                    color=(0, 255, 0),
                     batch=batch,
                     angle=food_percentage * 6.28319  # 2*pi for full circle
                 ))
         else:
-            # Draw critical state indicator (red ring)
-            if self.hunger < 30 or self.energy < 30 or self.health < 30:
-                shapes.append(pyglet.shapes.Circle(
-                    self.x * GRID_SIZE + GRID_SIZE // 2,
-                    self.y * GRID_SIZE + GRID_SIZE // 2,
-                    GRID_SIZE // 2 + 2,
-                    color=(255, 0, 0),
-                    batch=batch
-                ))
-
-            # Main body
+            # Living creature main body
             shapes.append(pyglet.shapes.Circle(
-                self.x * GRID_SIZE + GRID_SIZE // 2,
-                self.y * GRID_SIZE + GRID_SIZE // 2,
-                GRID_SIZE // 2,
+                center_x, center_y,
+                base_radius,
                 color=self.color,
                 batch=batch
             ))
 
-            # Age indicator (smaller circle inside)
+            # 4. Age indicator (inner circle)
             if self.mature:
                 age_factor = self.age / self.max_age
-                age_color = (
-                    int(255 * age_factor),
-                    int(255 * (1 - age_factor)),
-                    0
-                )
+                inner_radius = base_radius * INNER_CIRCLE_RATIO
+                
+                # Color transitions from green to yellow to red with age
+                if age_factor < 0.5:
+                    # Young adult: green to yellow
+                    green = 255
+                    red = int(255 * (age_factor * 2))
+                else:
+                    # Elder: yellow to red
+                    red = 255
+                    green = int(255 * (2 - age_factor * 2))
+                    
                 shapes.append(pyglet.shapes.Circle(
-                    self.x * GRID_SIZE + GRID_SIZE // 2,
-                    self.y * GRID_SIZE + GRID_SIZE // 2,
-                    GRID_SIZE // 4,
-                    color=age_color,
+                    center_x, center_y,
+                    inner_radius,
+                    color=(red, green, 0, 230),
                     batch=batch
                 ))
 
@@ -648,7 +654,7 @@ Position: ({self.x}, {self.y})"""
 class Environment:
     def __init__(self, width, height):
         # Adjust width to account for sidebar
-        self.width = width - (SIDEBAR_WIDTH // GRID_SIZE)
+        self.width = (WIDTH - SIDEBAR_WIDTH) // GRID_SIZE  # Use adjusted width
         self.height = height
         # Pass self (environment) to creature constructor
         self.creatures = [
@@ -1306,34 +1312,30 @@ def update_stats():
         stats_label.text = "No creature or egg selected"
 
 # Create the environment with only one creature
-env = Environment(WIDTH // GRID_SIZE, HEIGHT // GRID_SIZE)
+env = Environment((WIDTH - SIDEBAR_WIDTH) // GRID_SIZE, HEIGHT // GRID_SIZE)
 
 # Update the legend labels to include groups and headers
 legend_labels = [
     # Group 1: Basic States
     ("Basic States", "header"),
     ("Normal Creature", (0, 255, 0)),
-    ("Dead (with food remaining)", "dead_with_food"),
-    ("Dead (no food remaining)", (100, 0, 0)),
+    ("Dead Creature (with food)", "dead_with_food"),
+    ("Dead Creature (depleted)", (100, 0, 0)),
     ("Egg", (255, 200, 0)),
     
-    # Group 2: Activities
-    ("Activities", "header"),
-    ("Sleeping (in sleep area)", (100, 100, 255)),
-    ("Eating", (255, 200, 0)),
-    ("Carrying Food", (200, 150, 50)),
-    ("Ready to Lay Egg", (255, 200, 200)),
+    # Group 2: Age Indicators
+    ("Age Indicators", "header"),
+    ("Young Adult (green core)", "young_adult"),
+    ("Middle Age (yellow core)", "middle_age"),
+    ("Elder (red core)", "elder"),
     
     # Group 3: Status Indicators
     ("Status Indicators", "header"),
-    ("Low Energy (blue tint)", (0, 255, 255)),
-    ("Hungry (red tint)", (255, 255, 0)),
-    ("Critical Status (red ring)", "ring"),
-    
-    # Group 4: Age Indicators
-    ("Age Indicators", "header"),
-    ("Young Adult (inner circle)", "young"),
-    ("Elder (inner circle)", "elder")
+    ("Selected (white ring)", "selected"),
+    ("Critical Status (red ring)", "critical"),
+    ("Sleeping", (100, 100, 255)),
+    ("Carrying Food", (200, 150, 50)),
+    ("Ready to Lay Egg", (255, 200, 200))
 ]
 
 def update_ui_positions():
@@ -1415,31 +1417,59 @@ def on_draw():
         # Draw indicators with refined positioning
         x_pos = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 20 + LEGEND_ICON_SIZE//2
         if color == "dead_with_food":
-            # Draw base circle (dark red)
+            # Dead creature with food indicator
             pyglet.shapes.Circle(x_pos, y_offset, 
                                LEGEND_ICON_SIZE//2, color=(100, 0, 0)).draw()
-            # Draw food indicator arc (green)
+            # Draw green arc to show remaining food
             pyglet.shapes.Arc(x_pos, y_offset, 
-                            LEGEND_ICON_SIZE//3, color=(0, 255, 0),
-                            angle=4.71239).draw()  # About 3/4 of a circle
-        elif color == "ring":
+                            LEGEND_ICON_SIZE//2 * 0.8,  # Slightly smaller radius
+                            color=(0, 255, 0),
+                            start_angle=0,  # Start from right
+                            angle=4.71239,  # About 3/4 of a circle
+                            batch=None).draw()
+        elif color == "selected":
+            # Selection indicator with creature inside
             pyglet.shapes.Circle(x_pos, y_offset, 
-                               LEGEND_ICON_SIZE//2 + 2, color=(255, 0, 0)).draw()
-            pyglet.shapes.Circle(x_pos, y_offset, 
-                               LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
-        elif color == "young":
-            pyglet.shapes.Circle(x_pos, y_offset, 
-                               LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
-            pyglet.shapes.Circle(x_pos, y_offset, 
-                               LEGEND_ICON_SIZE//4, color=(50, 255, 50)).draw()
-        elif color == "elder":
+                               LEGEND_ICON_SIZE//2 + 4, color=(255, 255, 255, 180)).draw()
             pyglet.shapes.Circle(x_pos, y_offset, 
                                LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
+            # Add inner circle to match actual creature appearance
             pyglet.shapes.Circle(x_pos, y_offset, 
-                               LEGEND_ICON_SIZE//4, color=(255, 50, 50)).draw()
-        else:
+                               LEGEND_ICON_SIZE//2 * INNER_CIRCLE_RATIO, 
+                               color=(0, 255, 0, 230)).draw()
+        elif color == "critical":
+            # Critical status indicator with creature inside
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2 + 2, color=(255, 0, 0, 200)).draw()
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
+            # Add inner circle to match actual creature appearance
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2 * INNER_CIRCLE_RATIO, 
+                               color=(0, 255, 0, 230)).draw()
+        elif color in ["young_adult", "middle_age", "elder"]:
+            # Age indicator examples with outer and inner circles
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
+            # Different inner colors based on age
+            if color == "young_adult":
+                inner_color = (0, 255, 0)
+            elif color == "middle_age":
+                inner_color = (255, 255, 0)
+            else:  # elder
+                inner_color = (255, 0, 0)
+            pyglet.shapes.Circle(x_pos, y_offset, 
+                               LEGEND_ICON_SIZE//2 * INNER_CIRCLE_RATIO, 
+                               color=inner_color + (230,)).draw()  # Add alpha channel
+        elif isinstance(color, tuple):
+            # Regular color indicators (sleeping, carrying food, etc.)
             pyglet.shapes.Circle(x_pos, y_offset, 
                                LEGEND_ICON_SIZE//2, color=color).draw()
+            # Add inner circle for consistency if it's a living creature color
+            if color != (255, 200, 0):  # Not an egg
+                pyglet.shapes.Circle(x_pos, y_offset, 
+                                   LEGEND_ICON_SIZE//2 * INNER_CIRCLE_RATIO, 
+                                   color=color + (230,)).draw()
         
         # Draw label with refined positioning
         label = pyglet.text.Label(
