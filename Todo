@@ -1,10 +1,9 @@
-# Core Gameplay (Immediate Priority)
-
 ## Critical Fixes
-- [ ] Fix spawn location (prevent behind side panel)
 - [ ] Unselect egg on hatch
 - [ ] Basic creature balance
 - [ ] Sleep colour only when sleeping
+- [ ] Lose health while sleeping
+- [ ] Alive must move dead.
 
 ## Essential UI
 - [ ] Creature selection ring
