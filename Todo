@@ -1,88 +1,145 @@
-# Core Gameplay Improvements
+# Core Gameplay (Immediate Priority)
 
-## High Priority UI
+## Critical Fixes
 - [ ] Fix spawn location (prevent behind side panel)
+- [ ] Unselect egg on hatch
+- [ ] Basic creature balance
+
+## Essential UI
 - [ ] Creature selection ring
 - [ ] Info panel icons
-- [ ] Unselect egg on hatch
 - [ ] Hatch progress indicator
-- [ ] Improved creature color indicators
-- [ ] Eating indication
+- [ ] Basic status indicators
 
-## Creature Visualization
+## Basic Visualization
 - [ ] Better egg sprite
 - [ ] Selection ring improvements
   - Pulsing/animated selection ring
   - Different colors for creatures vs eggs
-- [ ] Status indicators
-  - Health/energy/hunger bars on side panel
-  - Icons for current state (sleeping, hungry, etc.)
-  - Visual trails for movement paths
-  - Color gradients for age progression
-  - Particle effects (eating/sleeping)
+- [ ] Basic status indicators
+  - Health/energy bars
+  - Current state icon
 
-## Info Panel Enhancement
-- [ ] Current goal/target display
-- [ ] Stat tooltips
-- [ ] Mini-map for colony overview
+# Mid-Term Goals
 
-# Advanced Features
-
-## Egg System
-- [ ] Multiple eggs implementation
-  - Different egg types with traits
-  - Slower hatch speed
-  - Incubation requirements
-  - Genetic trait inheritance
-  - Egg clustering bonuses
-  - Protection mechanics
+## Enhanced Gameplay
+- [ ] Improved creature color indicators
+- [ ] Eating indication
+- [ ] Visual trails for movement paths
+- [ ] Particle effects (eating/sleeping)
 
 ## Colony Management
-- [ ] Resource system
+- [ ] Basic resource system
 - [ ] Territory expansion
-- [ ] Specialized roles
-  - Guards
-  - Nurses
-  - Foragers
-- [ ] Disease/infection system
-- [ ] Weather effects
+- [ ] Simple roles system
 
 ## Environment
-- [ ] Terrain types affecting movement
-- [ ] Day/night cycle
-- [ ] Seasonal changes
-- [ ] Predator/prey relationships
-- [ ] Plant growth and harvesting
+- [ ] Basic terrain types
+- [ ] Simple day/night cycle
+- [ ] Basic plant growth
 
-## AI & Behavior
-- [ ] Creature personalities
-- [ ] State machine for behavior
-- [ ] Event system for interactions
-
-# Technical Improvements
-
-## Code Architecture
-- [ ] Modular code structure
+## Technical Foundation
 - [ ] Split into multiple files
   - Creatures
   - UI
   - Environment
 - [ ] Config file for constants
-- [ ] Better spatial partitioning
+- [ ] Basic optimization
+- [ ] Simple save system
 
-## Performance Optimization
+# Long-Term Enhancements
+
+## Advanced Features
+- [ ] Weather system
+- [ ] Complex AI behaviors
+- [ ] Advanced particle effects
+- [ ] Detailed statistics
+
+## Performance
 - [ ] Batch rendering
-- [ ] Pathfinding optimization
-- [ ] Improved collision detection
+- [ ] Advanced pathfinding
 - [ ] Multi-threading support
 - [ ] LOD system
 
-## Save System
-- [ ] Colony state saving
-- [ ] Genetics export/import
-- [ ] Statistics tracking
-- [ ] Achievement system
-- [ ] Scenario editor
+# Future Evolution (Last Priority)
+
+## Parasitic/Symbiotic System
+- [ ] Creature Type System
+  - Different creature types
+  - Type-specific attributes
+  - Visual distinctions
+  
+- [ ] Blood Feeding Mechanics
+  - Blood storage/levels
+  - Feeding system
+  - Regeneration mechanics
+  
+- [ ] Decomposition System
+  - Decomposition stages
+  - Fertility mechanics
+  - Plant growth
+  
+- [ ] Protection Mechanics
+  - Host grouping
+  - Predator system
+  - Guard behavior
+
+## Advanced Colony Features
+- [ ] Complex role specialization
+- [ ] Advanced territory management
+- [ ] Inter-colony interactions
 
 ## Documentation
 - [ ] GitHub readme
+- [ ] System documentation
+
+# Concept Documentation
+
+## Parasitic/Symbiotic System Overview
+
+### Core Concept
+The system reimagines the creature relationships as a complex symbiotic partnership between two species: parasitic protectors and host creatures. This creates a more nuanced ecosystem where both species depend on each other for survival.
+
+### Species Roles
+
+#### Parasitic Protectors (Main Creatures)
+- Feed on the blood of host creatures
+- Protect hosts from predators
+- Manage and guard territory
+- Store and process their dead for fertility
+- Slower reproduction, longer lifespan
+- More intelligent, capable of complex behaviors
+
+#### Host Creatures
+- Provide blood sustenance to parasites
+- Graze on plants from fertile ground
+- More vulnerable to predators
+- Faster reproduction rate
+- Rely on parasites for protection
+- Simpler behavior patterns
+
+### Ecological Cycle
+1. Dead creatures decompose in designated areas
+2. Decomposition creates fertile ground
+3. Plants grow in fertile areas
+4. Host creatures eat plants
+5. Parasites feed on host blood
+6. Both species protect each other
+
+### Gameplay Dynamics
+- Players manage both species' populations
+- Balance protection vs feeding needs
+- Maintain territory and resources
+- Handle predator threats
+- Manage decomposition areas
+- Ensure sustainable blood feeding
+
+### Unique Features
+- Complex interdependent relationships
+- Natural resource cycle
+- Territory management
+- Protection mechanics
+- Multiple species management
+- Environmental impact system
+
+This system creates a more complex and interconnected ecosystem, where success depends on maintaining balance between different species and managing resources effectively.
