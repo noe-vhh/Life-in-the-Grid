@@ -60,6 +60,17 @@ EYE_SIZE = 3  # Size of the eyes
 EYE_SPACING = 6  # Distance between eyes
 EYE_OFFSET_Y = 2  # Vertical offset from center
 
+# Add these constants near other eye-related constants
+PUPIL_SIZE = 2  # Size of the pupil (smaller than eye)
+PUPIL_RANGE = 2  # How far the pupil can move from center
+
+# Add these constants near other creature appearance constants
+ANTENNA_LENGTH = 8  # Length of each antenna
+ANTENNA_WIDTH = 2   # Width/thickness of antennae
+ANTENNA_SPACING = 6  # Space between antenna bases
+ANTENNA_WAVE_SPEED = 0.25  # Speed of antenna movement
+ANTENNA_WAVE_AMOUNT = 0.5  # How much the antennae wave (in radians)
+
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -952,15 +963,93 @@ Position: ({self.x}, {self.y})"""
                                 batch=batch
                             )
                         )
+                        
+                        # Calculate pupil offset based on target or movement direction
+                        pupil_offset_x = 0
+                        pupil_offset_y = 0
+                        
+                        if self.target:
+                            if isinstance(self.target, (Creature, Egg)):
+                                # Look at target creature/egg
+                                dx = self.target.x - self.x
+                                dy = self.target.y - self.y
+                            elif self.target in ["sleeping", "nursery", "food"]:
+                                # Look towards area center
+                                center = self.env.get_area_center(self.target)
+                                dx = (center[0] / GRID_SIZE) - self.x
+                                dy = (center[1] / GRID_SIZE) - self.y
+                            else:
+                                dx = dy = 0
+                            
+                            # Normalize direction to maximum pupil range
+                            if dx != 0 or dy != 0:
+                                magnitude = (dx * dx + dy * dy) ** 0.5
+                                pupil_offset_x = (dx / magnitude) * PUPIL_RANGE
+                                pupil_offset_y = (dy / magnitude) * PUPIL_RANGE
+                        
+                        # Draw pupil with offset
                         shapes.append(
                             pyglet.shapes.Circle(
-                                eye_x, eye_y,
-                                EYE_SIZE,  # Pupil size
+                                eye_x + pupil_offset_x,
+                                eye_y + pupil_offset_y,
+                                PUPIL_SIZE,
                                 color=(0, 0, 0),
                                 batch=batch
                             )
                         )
     
+        # Draw antennae
+        if not self.dead:  # Only living creatures have antennae
+            # Calculate base positions for antennae
+            antenna_base_y = center_y + base_radius - 2  # Slightly below top of head
+            left_base_x = center_x - ANTENNA_SPACING // 2
+            right_base_x = center_x + ANTENNA_SPACING // 2
+            
+            # Calculate wave effect
+            wave = math.sin(self.animation_timer * ANTENNA_WAVE_SPEED) * ANTENNA_WAVE_AMOUNT
+            # Add extra wave when moving or targeting
+            if self.target or self.carrying_food:
+                wave *= 1.5  # More movement when active
+            
+            # Draw left antenna
+            left_tip_x = left_base_x - math.sin(wave) * ANTENNA_LENGTH
+            left_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
+            shapes.append(pyglet.shapes.Line(
+                left_base_x, antenna_base_y,
+                left_tip_x, left_tip_y,
+                width=ANTENNA_WIDTH,
+                color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+                batch=batch
+            ))
+            
+            # Draw right antenna
+            right_tip_x = right_base_x + math.sin(wave) * ANTENNA_LENGTH
+            right_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
+            shapes.append(pyglet.shapes.Line(
+                right_base_x, antenna_base_y,
+                right_tip_x, right_tip_y,
+                width=ANTENNA_WIDTH,
+                color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+                batch=batch
+            ))
+            
+            # Draw small dots at antenna tips
+            tip_size = ANTENNA_WIDTH // 2
+            shapes.extend([
+                pyglet.shapes.Circle(
+                    left_tip_x, left_tip_y,
+                    tip_size,
+                    color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+                    batch=batch
+                ),
+                pyglet.shapes.Circle(
+                    right_tip_x, right_tip_y,
+                    tip_size,
+                    color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+                    batch=batch
+                )
+            ])
+
         return shapes
 
     def update_eyes(self):
