@@ -3,12 +3,11 @@
 - [ ] Better egg sprite
 - [ ] Slower hatching speed
 - [ ] Multiple eggs per creature
+- [ ] Update egg icon/animation to match new egg sprite
 
 ## Essential UI
-- [ ] Info panel
-- Current state icon
-- [ ] Eating indication
-- [ ] Particle effects (eating/sleeping)
+- [ ] Info panel update and improvements
+- [ ] Bars to display hunger, energy, health
 
 # Mid-Term Goals
 

@@ -43,6 +43,11 @@ LEGEND_TOP_PADDING = 50    # Space from top of panel to first item
 # Constants for area positioning (add these near other constants)
 QUADRANT_OFFSET = 300  # Increased distance between centers to prevent overlap
 
+# Add these constants near the top with other constants
+ICON_ANIMATION_SPEED = 0.05  # Reduced from 0.5 to 0.2 (slower animation)
+ICON_OFFSET_Y = GRID_SIZE // 2  # Changed from GRID_SIZE to GRID_SIZE // 2
+ICON_SIZE = GRID_SIZE // 2  # Size of the icons
+
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -233,7 +238,11 @@ class Creature:
         self.egg = False
         self.has_laid_egg = False
         self.dragging_target = None  # Add this new attribute
-
+        
+        # Add animation properties
+        self.animation_timer = 0
+        self.animation_frame = 0
+        
     def calculate_happiness(self):
         """Calculate creature happiness based on various factors"""
         happiness = 100
@@ -321,142 +330,154 @@ class Creature:
 
     def update(self):
         if self.dead:
-            return  # Dead creatures don't update or move
-            
-        if not self.dead:
-            # Always update basic stats first
-            self.age += 1
-            if self.age >= 20:
-                self.mature = True
-            
-            # Age effects and death
-            if self.age > self.max_age * 0.7:
-                if random.random() < 0.1:
-                    self.health = max(0, self.health - 1)
-                    self.age_related_health_loss = True
-            
-            if self.age >= self.max_age:
+            return
+
+        # Always update basic stats first
+        self.age += 1
+        if self.age >= 20:
+            self.mature = True
+        
+        # Age effects and death
+        if self.age > self.max_age * 0.7:
+            if random.random() < 0.1:
+                self.health = max(0, self.health - 1)
+                self.age_related_health_loss = True
+        
+        if self.age >= self.max_age:
+            self.die()
+            return
+
+        # Always update hunger and energy
+        if random.random() < 0.2:
+            self.hunger = max(0, self.hunger - 1)
+        energy_cost = 1 if self.eating or self.carrying_food else 0.5
+        self.energy = max(0, self.energy - energy_cost)
+
+        # Reset eating state at the start of each update
+        if self.eating:
+            self.eating = False
+            self.color = (0, 255, 0)  # Reset color
+            self.animation_timer = 0
+            self.animation_frame = 0
+
+        # Health reduction from hunger
+        if self.hunger <= 0:
+            self.health = max(0, self.health - 1)
+            if self.health <= 0:
                 self.die()
                 return
 
-            # Always update hunger and energy - REDUCED RATES
-            if random.random() < 0.2:  # Reduced from 0.5
-                self.hunger = max(0, self.hunger - 1)
-            energy_cost = 1 if self.eating or self.carrying_food else 0.5  # Reduced from 2/1
-            self.energy = max(0, self.energy - energy_cost)
+        # Check for critical hunger - override sleep state
+        if self.hunger <= 20:
+            self.sleeping = False
+            self.target = "food"
+            self.move(self.env.width, self.env.height)
+            return
 
-            # Health reduction from hunger - process this before other behaviors
-            if self.hunger <= 0:
-                self.health = max(0, self.health - 1)
-                if self.health <= 0:
-                    self.die()
-                    return
-
-            # Check for critical hunger - override sleep state
-            if self.hunger <= 20:
-                self.sleeping = False  # Wake up if starving
-                self.target = "food"
-                self.move(self.env.width, self.env.height)
-
-            # Sleep behavior
-            elif self.sleeping:
-                if not self.env.is_in_area(self.x, self.y, "sleeping"):
-                    self.move(self.env.width, self.env.height)
-                else:
-                    # Only sleep and recover energy if in sleep zone
-                    recovery_rate = 3 if self.hunger > 50 else 1
-                    self.energy = min(100, self.energy + recovery_rate)
-                    
-                    # Wake up conditions
-                    if (self.energy >= self.wake_threshold or  # Enough energy
-                        self.hunger <= 30 or                   # Getting hungry
-                        self.health < 50):                     # Health issues
-                        self.sleeping = False
-                        self.color = (0, 255, 0)
-                        self.target = None
-                    else:
-                        self.color = (100, 100, 255)  # Sleeping color
-
-            # Check for sleep need - only if not critically hungry
-            elif self.energy <= self.rest_threshold and self.hunger > 30:
-                self.sleeping = True
-                self.color = (100, 100, 255)
+        # Sleep behavior
+        if self.sleeping:
+            if not self.env.is_in_area(self.x, self.y, "sleeping"):
                 self.target = "sleeping"
-
-            # Awake behavior
+                self.color = (0, 255, 0)
+                self.move(self.env.width, self.env.height)
             else:
-                # Reset eating state but NOT carrying_food state
-                self.eating = False
-                if not self.carrying_food:
+                recovery_rate = 3 if self.hunger > 50 else 1
+                self.energy = min(100, self.energy + recovery_rate)
+                self.color = (100, 100, 255)
+                
+                if (self.energy >= self.wake_threshold or
+                    self.hunger <= 30 or
+                    self.health < 50):
+                    self.sleeping = False
                     self.color = (0, 255, 0)
-
-                # Move according to current state
+                    self.target = None
+        
+        # Check for sleep need
+        elif self.energy <= self.rest_threshold and self.hunger > 30:
+            self.sleeping = True
+            self.target = "sleeping"
+            self.color = (0, 255, 0)
+            self.move(self.env.width, self.env.height)
+        
+        # Normal behavior
+        else:
+            if not self.carrying_food:
+                self.color = (0, 255, 0)
+            
+            # Always try to move unless specifically sleeping in sleep area
+            if not (self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping")):
                 self.move(self.env.width, self.env.height)
 
-                # Check egg laying conditions first
-                if (not self.sleeping and not self.eating and 
-                    not self.egg and self.mature and not self.has_laid_egg and
-                    self.happiness >= 70 and 
-                    self.energy >= 60 and    
-                    self.hunger >= 60):      
+            # Check egg laying conditions first
+            if (not self.sleeping and not self.eating and 
+                not self.egg and self.mature and not self.has_laid_egg and
+                self.happiness >= 70 and 
+                self.energy >= 60 and    
+                self.hunger >= 60):  
+                
+                if self.env.is_in_area(self.x, self.y, "nursery"):
+                    # Try to lay egg in adjacent spot
+                    adjacent_spots = [
+                        (self.x + dx, self.y + dy)
+                        for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]
+                        if (self.env.is_valid_position(self.x + dx, self.y + dy) and
+                            not self.env.is_position_occupied(self.x + dx, self.y + dy) and
+                            self.env.is_in_area(self.x + dx, self.y + dy, "nursery"))
+                    ]
                     
-                    if self.env.is_in_area(self.x, self.y, "nursery"):
-                        # Try to lay egg in adjacent spot
-                        adjacent_spots = [
-                            (self.x + dx, self.y + dy)
-                            for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]
-                            if (self.env.is_valid_position(self.x + dx, self.y + dy) and
-                                not self.env.is_position_occupied(self.x + dx, self.y + dy) and
-                                self.env.is_in_area(self.x + dx, self.y + dy, "nursery"))
-                        ]
-                        
-                        if adjacent_spots:
-                            egg_x, egg_y = random.choice(adjacent_spots)
-                            self.energy -= 50
-                            new_egg = Egg(egg_x, egg_y)
-                            self.env.eggs.append(new_egg)
-                            self.env.grid[(egg_x, egg_y)] = new_egg
-                            self.has_laid_egg = True
-                            self.target = None
-                    else:
-                        # Move towards nursery if ready to lay egg
-                        self.target = "nursery"
-                        self.color = (255, 200, 200)
-                        return  # Return here to prioritize egg laying
+                    if adjacent_spots:
+                        egg_x, egg_y = random.choice(adjacent_spots)
+                        self.energy -= 50
+                        new_egg = Egg(egg_x, egg_y)
+                        self.env.eggs.append(new_egg)
+                        self.env.grid[(egg_x, egg_y)] = new_egg
+                        self.has_laid_egg = True
+                        self.target = None
+                else:
+                    # Move towards nursery if ready to lay egg
+                    self.target = "nursery"
+                    self.color = (255, 200, 200)
+                    return  # Return here to prioritize egg laying
 
-                # Prioritize eating over moving bodies
-                if not self.sleeping and not self.eating:
-                    nearby_entities = self.env.get_nearby_entities(self.x, self.y)
-                    found_food = False
-                    
-                    # First check if we can eat something adjacent
-                    if self.hunger < 70:
-                        for entity in nearby_entities:
-                            if isinstance(entity, Creature) and entity.dead and entity.food_value > 0:
-                                dx = abs(self.x - entity.x)
-                                dy = abs(self.y - entity.y)
-                                if dx + dy == 1:  # Adjacent but not diagonal
-                                    if self.eat(entity):
-                                        self.color = (255, 200, 0)
-                                        found_food = True
-                                        self.target = None
-                                        self.carrying_food = False
-                                        break
-                    
-                    # If we didn't find adjacent food to eat, look for dead creatures to move
-                    if not found_food and not self.carrying_food:
-                        for entity in nearby_entities:
-                            if (isinstance(entity, Creature) and 
-                                entity.dead and 
-                                entity.food_value > 0 and 
-                                not self.env.is_in_area(entity.x, entity.y, "food") and
-                                not any(c.target == entity for c in self.env.creatures if c != self and not c.dead)):
-                                # Check if adjacent to the dead creature
-                                if abs(self.x - entity.x) + abs(self.y - entity.y) == 1:
-                                    self.target = entity
-                                    self.carrying_food = True
-                                    self.color = (200, 150, 50)  # Brown while carrying
+            # Prioritize eating over moving bodies
+            if not self.sleeping and not self.eating:
+                nearby_entities = self.env.get_nearby_entities(self.x, self.y)
+                found_food = False
+                
+                # First check if we can eat something adjacent
+                if self.hunger < 70:
+                    for entity in nearby_entities:
+                        if isinstance(entity, Creature) and entity.dead and entity.food_value > 0:
+                            dx = abs(self.x - entity.x)
+                            dy = abs(self.y - entity.y)
+                            if dx + dy == 1:  # Adjacent but not diagonal
+                                if self.eat(entity):
+                                    self.color = (255, 200, 0)
+                                    found_food = True
+                                    self.target = None
+                                    self.carrying_food = False
                                     break
+                
+                # If we didn't find adjacent food to eat, look for dead creatures to move
+                if not found_food and not self.carrying_food:
+                    for entity in nearby_entities:
+                        if (isinstance(entity, Creature) and 
+                            entity.dead and 
+                            entity.food_value > 0 and 
+                            not self.env.is_in_area(entity.x, entity.y, "food") and
+                            not any(c.target == entity for c in self.env.creatures if c != self and not c.dead)):
+                            # Check if adjacent to the dead creature
+                            if abs(self.x - entity.x) + abs(self.y - entity.y) == 1:
+                                self.target = entity
+                                self.carrying_food = True
+                                self.color = (200, 150, 50)  # Brown while carrying
+                                break
+
+            # Reset carrying_food state if in food storage area
+            if self.carrying_food and self.env.is_in_area(self.x, self.y, "food"):
+                self.carrying_food = False
+                self.target = None
+                self.color = (0, 255, 0)  # Reset color
 
             # Update happiness and visual state at the end
             self.happiness = self.calculate_happiness()
@@ -564,16 +585,21 @@ Position: ({self.x}, {self.y})"""
             dx = abs(self.x - food_source.x)
             dy = abs(self.y - food_source.y)
             if dx + dy == 1:  # Must be exactly one space away (no diagonals)
+                # Set eating state
                 self.eating = True
+                self.target = None  # Clear any other targets
+                
+                # Process the eating action
                 food_amount = min(40, food_source.food_value)
                 food_source.food_value -= food_amount
                 self.hunger = min(100, self.hunger + food_amount * 1.5)
                 self.color = (255, 200, 0)  # Yellow while eating
+                
+                # Don't reset eating state here - let update() handle it
                 return True
         return False
 
     def draw(self, batch):
-        """Draw the creature with improved indicators"""
         shapes = []
         center_x = self.x * GRID_SIZE + GRID_SIZE // 2
         center_y = self.y * GRID_SIZE + GRID_SIZE // 2
@@ -647,6 +673,175 @@ Position: ({self.x}, {self.y})"""
                     color=(red, green, 0, 230),
                     batch=batch
                 ))
+
+        # Add status icons animation
+        if not self.dead:
+            # Only update animation if game is not paused (FPS > 0)
+            if FPS > 0:  
+                self.animation_timer += ICON_ANIMATION_SPEED
+                if self.animation_timer >= 1:
+                    self.animation_timer = 0
+                    self.animation_frame = (self.animation_frame + 1) % 3
+
+            icon_x = self.x * GRID_SIZE + GRID_SIZE // 2
+            icon_y = self.y * GRID_SIZE + GRID_SIZE + ICON_OFFSET_Y
+
+            # 1. Eating animation (highest priority - always show when eating)
+            if self.eating:
+                icon_color = (255, 200, 0, 255)
+                if self.animation_frame == 0:
+                    angle = 15
+                elif self.animation_frame == 1:
+                    angle = 0
+                else:
+                    angle = -15
+
+                fork_height = ICON_SIZE
+                fork_width = ICON_SIZE // 3
+                
+                cx = icon_x
+                cy = icon_y
+                
+                rotated_rect = pyglet.shapes.Rectangle(
+                    cx - fork_width//2,
+                    cy - fork_height//2,
+                    fork_width,
+                    fork_height,
+                    color=icon_color,
+                    batch=batch
+                )
+                rotated_rect.rotation = angle
+                shapes.append(rotated_rect)
+
+            # 2. Hunger exclamation animation
+            elif self.hunger < 30 and self.target == "food":
+                y_offset = math.sin(self.animation_timer * 3) * 5  # Bobbing motion
+                hungry_label = pyglet.text.Label(
+                    "!",
+                    font_name='Arial',
+                    font_size=ICON_SIZE,
+                    bold=True,
+                    x=icon_x,
+                    y=icon_y + y_offset,
+                    anchor_x='center',
+                    anchor_y='center',
+                    color=(255, 100, 100, 255)
+                )
+                hungry_label.draw()
+
+            # 3. Egg laying animation
+            elif (not self.has_laid_egg and self.mature and 
+                self.target == "nursery"):
+                # Pulsing effect
+                scale = 1 + math.sin(self.animation_timer * 3) * 0.2
+                egg_size = ICON_SIZE // 2 * scale
+                
+                shapes.append(pyglet.shapes.Circle(
+                    icon_x,
+                    icon_y,
+                    egg_size,
+                    color=(255, 200, 200, 200),
+                    batch=batch
+                ))
+
+            # 4. Low energy animation
+            elif self.energy < 30 and not self.eating and not (self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping")):
+                # Flashing effect
+                alpha = 255 if self.animation_frame < 2 else 180
+                battery_width = ICON_SIZE
+                battery_height = ICON_SIZE // 2
+                
+                # Battery outline
+                shapes.append(pyglet.shapes.Rectangle(
+                    icon_x - battery_width//2,
+                    icon_y - battery_height//2,
+                    battery_width,
+                    battery_height,
+                    color=(100, 100, 100, alpha),
+                    batch=batch
+                ))
+                
+                # Dynamic battery level
+                battery_level = max(1, int((self.energy / 30) * (battery_width - 4)))
+                shapes.append(pyglet.shapes.Rectangle(
+                    icon_x - battery_width//2 + 2,
+                    icon_y - battery_height//2 + 2,
+                    battery_level,
+                    battery_height - 4,
+                    color=(255, 0, 0, alpha),
+                    batch=batch
+                ))
+
+            # 5. Carrying food animation
+            elif self.carrying_food:
+                # Draw package icon
+                package_size = ICON_SIZE // 2
+                y_offset = math.sin(self.animation_timer * 3) * 3  # Slight bobbing
+
+                # Package outline
+                shapes.append(pyglet.shapes.Rectangle(
+                    icon_x - package_size//2,
+                    icon_y + y_offset - package_size//2,
+                    package_size,
+                    package_size,
+                    color=(200, 150, 50),  # Brown color
+                    batch=batch
+                ))
+
+                # Package cross lines
+                shapes.append(pyglet.shapes.Line(
+                    icon_x - package_size//2,
+                    icon_y + y_offset,
+                    icon_x + package_size//2,
+                    icon_y + y_offset,
+                    color=(150, 100, 0),
+                    batch=batch
+                ))
+                shapes.append(pyglet.shapes.Line(
+                    icon_x,
+                    icon_y + y_offset - package_size//2,
+                    icon_x,
+                    icon_y + y_offset + package_size//2,
+                    color=(150, 100, 0),
+                    batch=batch
+                ))
+
+            # 6. Sleep animation
+            elif self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping"):
+                z_size = ICON_SIZE // 2
+                for i in range(3):
+                    if i <= self.animation_frame:
+                        z_label = pyglet.text.Label(
+                            "Z",
+                            font_name='Arial',
+                            font_size=z_size,
+                            bold=True,
+                            x=icon_x + (i * z_size//2),
+                            y=icon_y + (i * z_size//2),
+                            anchor_x='center',
+                            anchor_y='center',
+                            color=(200, 200, 255, 255)
+                        )
+                        z_label.draw()
+
+            # 7. Happy animation (lowest priority)
+            elif self.happiness > 80 and not self.sleeping:
+                # Floating heart animation
+                angle = self.animation_timer * 3
+                x_offset = math.cos(angle) * 5
+                y_offset = math.sin(angle) * 5
+                
+                heart_label = pyglet.text.Label(
+                    "♥",
+                    font_name='Arial',
+                    font_size=ICON_SIZE // 2,
+                    x=icon_x + x_offset,
+                    y=icon_y + y_offset,
+                    anchor_x='center',
+                    anchor_y='center',
+                    color=(255, 150, 150, 200)
+                )
+                heart_label.draw()
 
         return shapes
 
@@ -810,8 +1005,8 @@ class Environment:
                 shapes.append(pyglet.shapes.Circle(
                     egg.x * GRID_SIZE + GRID_SIZE // 2,
                     egg.y * GRID_SIZE + GRID_SIZE // 2,
-                    (GRID_SIZE // 3) + 2,
-                    color=(255, 255, 255),
+                    (GRID_SIZE // 3) + 4,  # Make border larger than the egg
+                    color=(255, 255, 255, 128),  # Semi-transparent white
                     batch=batch
                 ))
             
