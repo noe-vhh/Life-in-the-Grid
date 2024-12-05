@@ -48,6 +48,11 @@ ICON_ANIMATION_SPEED = 0.05  # Reduced from 0.5 to 0.2 (slower animation)
 ICON_OFFSET_Y = GRID_SIZE // 2  # Changed from GRID_SIZE to GRID_SIZE // 2
 ICON_SIZE = GRID_SIZE // 2  # Size of the icons
 
+# Add these constants near other egg-related constants
+EGG_PULSE_SPEED = 2.0  # Speed of the pulsing animation
+EGG_INNER_RATIO = 0.7  # Size of the inner egg shape
+EGG_SHINE_OFFSET = 0.3  # Offset for the shine effect
+
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -282,6 +287,7 @@ class Creature:
             center = self.env.get_area_center("nursery")
             target_x = int(center[0] / GRID_SIZE)
             target_y = int(center[1] / GRID_SIZE)
+            self.color = (255, 200, 0)  # Match egg color when moving to nursery
         elif self.target == "food":
             # First check if there's food adjacent to eat
             nearby_entities = self.env.get_nearby_entities(self.x, self.y)
@@ -444,7 +450,7 @@ class Creature:
                 else:
                     # Move towards nursery if ready to lay egg
                     self.target = "nursery"
-                    self.color = (255, 200, 200)
+                    self.color = (255, 200, 0)  # Match egg color
                     return  # Return here to prioritize egg laying
 
             # Prioritize eating over moving bodies
@@ -536,7 +542,7 @@ class Creature:
         elif self.carrying_food:
             self.color = (200, 150, 50)   # Brown while carrying
         elif self.target == "nursery":
-            self.color = (255, 200, 200)  # Pink while ready to lay egg
+            self.color = (255, 200, 0)    # Changed to match egg color (was pink)
         else:
             self.color = (r, g, b)
 
@@ -764,7 +770,7 @@ Position: ({self.x}, {self.y})"""
                     icon_x,
                     icon_y,
                     egg_size,
-                    color=(255, 200, 200, 200),
+                    color=(255, 200, 0, 200),  # Match egg color
                     batch=batch
                 ))
 
@@ -1032,22 +1038,7 @@ class Environment:
 
         # Draw eggs
         for egg in self.eggs:
-            if egg.selected:
-                shapes.append(pyglet.shapes.Circle(
-                    egg.x * GRID_SIZE + GRID_SIZE // 2,
-                    egg.y * GRID_SIZE + GRID_SIZE // 2,
-                    (GRID_SIZE // 3) + 4,  # Make border larger than the egg
-                    color=(255, 255, 255, 128),  # Semi-transparent white
-                    batch=batch
-                ))
-            
-            shapes.append(pyglet.shapes.Circle(
-                egg.x * GRID_SIZE + GRID_SIZE // 2,
-                egg.y * GRID_SIZE + GRID_SIZE // 2,
-                GRID_SIZE // 3,
-                color=(255, 200, 0),
-                batch=batch
-            ))
+            shapes.extend(egg.draw(batch))  # Ensure this line is calling the draw method
 
         # Draw creatures using their new draw method
         for creature in self.creatures:
@@ -1374,14 +1365,15 @@ class Egg:
         self.y = y
         self.env = environment
         self.timer = 0
+        self.hatch_time = 300  # Increased from 100 to 300 for slower hatching
         self.selected = False
         self.ready_to_hatch = False
 
     def update(self):
         """Increment the egg's timer and check if ready to hatch."""
-        if self.timer < 100:
-            self.timer += 1
-        if self.timer >= 100:
+        if self.timer < self.hatch_time:
+            self.timer += 0.5  # Reduced from 1 to 0.5 for slower progression
+        if self.timer >= self.hatch_time:
             # Reset egg laying status for all nearby creatures
             nearby_creatures = [
                 creature for creature in self.env.creatures
@@ -1393,31 +1385,67 @@ class Egg:
             self.ready_to_hatch = True
 
     def __str__(self):
-        return f"Egg Timer: {min(self.timer, 100)}"
+        return f"Egg Timer: {min(int((self.timer/self.hatch_time) * 100), 100)}%"
 
     def draw(self, batch):
-        """Draw the egg with selection indicator if selected"""
+        """Draw the egg with improved visuals and animations"""
         shapes = []
-
-        # Add selection indicator (white border) if selected
+        
+        # Calculate center position
+        center_x = self.x * GRID_SIZE + GRID_SIZE // 2
+        center_y = self.y * GRID_SIZE + GRID_SIZE // 2
+        base_radius = GRID_SIZE // 3
+        
+        # Calculate pulse effect
+        pulse = math.sin(self.timer * EGG_PULSE_SPEED * math.pi / 100) * 0.1
+        current_radius = base_radius * (1 + pulse)
+        
+        # Selection indicator (if selected)
         if self.selected:
             shapes.append(pyglet.shapes.Circle(
-                self.x * GRID_SIZE + GRID_SIZE // 2,
-                self.y * GRID_SIZE + GRID_SIZE // 2,
-                (GRID_SIZE // 3) + 4,  # Make border larger than the egg
-                color=(255, 255, 255, 128),  # Semi-transparent white
+                center_x, center_y,
+                current_radius + 4,
+                color=(255, 255, 255, 128),
                 batch=batch
             ))
-
-        # Draw the egg
+        
+        # Main egg shape (outer)
         shapes.append(pyglet.shapes.Circle(
-            self.x * GRID_SIZE + GRID_SIZE // 2,
-            self.y * GRID_SIZE + GRID_SIZE // 2,
-            GRID_SIZE // 3,
+            center_x, center_y,
+            current_radius,
             color=(255, 200, 0),
             batch=batch
         ))
-
+        
+        # Inner egg shape (darker)
+        shapes.append(pyglet.shapes.Circle(
+            center_x, center_y,
+            current_radius * EGG_INNER_RATIO,
+            color=(230, 180, 0),
+            batch=batch
+        ))
+        
+        # Add shine effect (small white circle in upper-right)
+        shine_x = center_x + current_radius * EGG_SHINE_OFFSET
+        shine_y = center_y + current_radius * EGG_SHINE_OFFSET
+        shapes.append(pyglet.shapes.Circle(
+            shine_x, shine_y,
+            current_radius * 0.2,
+            color=(255, 255, 255, 180),
+            batch=batch
+        ))
+        
+        # Progress indicator (arc around the egg)
+        if self.timer > 0:
+            progress = min(self.timer / 100, 1.0)
+            shapes.append(pyglet.shapes.Arc(
+                center_x, center_y,
+                current_radius + 2,
+                color=(255, 255, 255, 150),
+                batch=batch,
+                angle=progress * math.pi * 2  # Full circle is 2π radians
+            ))
+        
         return shapes
 
 # Handle mouse clicks
@@ -1570,7 +1598,7 @@ legend_labels = [
     ("Critical Status (red ring)", "critical"),
     ("Sleeping", (100, 100, 255)),
     ("Carrying Food", (200, 150, 50)),
-    ("Ready to Lay Egg", (255, 200, 200))
+    ("Ready to Lay Egg", (255, 200, 0))  # Changed to match egg color
 ]
 
 def update_ui_positions():
