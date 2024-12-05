@@ -210,7 +210,7 @@ class Creature:
     def __init__(self, x, y, environment, health=100, energy=100):
         # Initialize all attributes first
         self.egg_laying_cooldown = 0
-        self.egg_laying_cooldown_max = 100
+        self.egg_laying_cooldown_max = 300
         self.rest_threshold = 30
         self.wake_threshold = 80
         self.max_age = random.randint(500, 750)
@@ -410,9 +410,14 @@ class Creature:
             if not (self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping")):
                 self.move(self.env.width, self.env.height)
 
+            # Update egg laying cooldown
+            if self.egg_laying_cooldown > 0:
+                self.egg_laying_cooldown -= 1
+
             # Check egg laying conditions first
             if (not self.sleeping and not self.eating and 
-                not self.egg and self.mature and not self.has_laid_egg and
+                not self.egg and self.mature and 
+                self.egg_laying_cooldown == 0 and  # Only if cooldown is complete
                 self.happiness >= 70 and 
                 self.energy >= 60 and    
                 self.hunger >= 60):  
@@ -430,10 +435,11 @@ class Creature:
                     if adjacent_spots:
                         egg_x, egg_y = random.choice(adjacent_spots)
                         self.energy -= 50
-                        new_egg = Egg(egg_x, egg_y)
+                        new_egg = Egg(egg_x, egg_y, self.env)
                         self.env.eggs.append(new_egg)
                         self.env.grid[(egg_x, egg_y)] = new_egg
-                        self.has_laid_egg = True
+                        self.has_laid_egg = True  # Track current egg
+                        self.egg_laying_cooldown = self.egg_laying_cooldown_max  # Start cooldown
                         self.target = None
                 else:
                     # Move towards nursery if ready to lay egg
@@ -540,13 +546,13 @@ class Creature:
             # Try to lay egg in current position
             if not self.env.is_position_occupied(self.x, self.y + 1):
                 self.energy -= 90
-                new_egg = Egg(self.x, self.y + 1)
+                new_egg = Egg(self.x, self.y + 1, self.env)
                 self.env.eggs.append(new_egg)
                 self.env.grid[(self.x, self.y + 1)] = new_egg
                 self.has_laid_egg = True
             elif not self.env.is_position_occupied(self.x + 1, self.y):
                 self.energy -= 90
-                new_egg = Egg(self.x + 1, self.y)
+                new_egg = Egg(self.x + 1, self.y, self.env)
                 self.env.eggs.append(new_egg)
                 self.env.grid[(self.x + 1, self.y)] = new_egg
                 self.has_laid_egg = True
@@ -918,6 +924,8 @@ class Environment:
 
     def update(self, dt):
         """Update the environment, including moving creatures and handling interactions."""
+        global selected_egg  # Add this line to modify the global variable
+
         self.update_area_scales()
         
         # Clear and rebuild grid at the start of update
@@ -946,6 +954,11 @@ class Environment:
         for egg in self.eggs[:]:  # Create a copy of the list to safely modify it
             egg.update()
             if egg.ready_to_hatch:
+                # Unselect the egg if it is selected
+                if selected_egg == egg:
+                    selected_egg.selected = False
+                    selected_egg = None
+
                 # Create new creature at egg's position
                 new_creature = Creature(egg.x, egg.y, self)
                 self.creatures.append(new_creature)
@@ -1356,18 +1369,27 @@ class Environment:
 
 # The egg class to handle egg incubation
 class Egg:
-    def __init__(self, x, y):
+    def __init__(self, x, y, environment):
         self.x = x
         self.y = y
+        self.env = environment
         self.timer = 0
         self.selected = False
-        self.ready_to_hatch = False  # New flag to indicate hatching
+        self.ready_to_hatch = False
 
     def update(self):
         """Increment the egg's timer and check if ready to hatch."""
         if self.timer < 100:
             self.timer += 1
         if self.timer >= 100:
+            # Reset egg laying status for all nearby creatures
+            nearby_creatures = [
+                creature for creature in self.env.creatures
+                if abs(creature.x - self.x) + abs(creature.y - self.y) <= 3  # Within 3 tiles
+                and creature.has_laid_egg
+            ]
+            for creature in nearby_creatures:
+                creature.has_laid_egg = False  # Allow them to lay eggs again
             self.ready_to_hatch = True
 
     def __str__(self):
