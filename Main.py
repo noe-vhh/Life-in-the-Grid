@@ -90,6 +90,7 @@ SMILE_CURVE = 3  # Amount of curve for smiles/frowns
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Add these constants near other appearance-related constants
 TEXTURE_PATTERNS = {
     "dots": {"chance": 0.25, "density": 8},
@@ -159,6 +160,8 @@ class LoadingBar:
                 color=self.color
             ).draw()
 
+=======
+>>>>>>> parent of fd846d1 (Added creature textures and patterns. Updated Todo list.)
 =======
 >>>>>>> parent of fd846d1 (Added creature textures and patterns. Updated Todo list.)
 =======
@@ -1372,6 +1375,9 @@ Position: ({self.x}, {self.y})"""
         elif self.mouth_open_amount > self.target_mouth_open:
             self.mouth_open_amount = max(self.mouth_open_amount - MOUTH_OPEN_SPEED, self.target_mouth_open)
 <<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> parent of fd846d1 (Added creature textures and patterns. Updated Todo list.)
+=======
 >>>>>>> parent of fd846d1 (Added creature textures and patterns. Updated Todo list.)
 =======
 >>>>>>> parent of fd846d1 (Added creature textures and patterns. Updated Todo list.)
