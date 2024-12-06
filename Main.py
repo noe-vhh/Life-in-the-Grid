@@ -76,6 +76,9 @@ BREATH_SPEED = 0.1  # Even slower breathing animation
 BREATH_AMOUNT = 0.05  # Increased from 0.08 to 0.15 (15% of size)
 DEAD_BREATH_AMOUNT = 0.08  # Increased from 0.04 to 0.08 (8% of size)
 
+# Near the top with other constants
+HEART_ANIMATION_SPEED = 2.0  # Adjust this value to control animation speed
+
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -278,6 +281,9 @@ class Creature:
         # Add breathing animation property
         self.breath_offset = random.uniform(0, 2 * math.pi)  # Random starting phase
         
+        # Add heart animation property
+        self.heart_animation_offset = random.uniform(0, 2 * math.pi)  # Add random starting phase
+        
     def calculate_happiness(self):
         """Calculate creature happiness based on various factors"""
         happiness = 100
@@ -369,6 +375,10 @@ class Creature:
     def update(self):
         if self.dead:
             return
+
+        # Add this near the start of update
+        if FPS > 0:  # Only update animation if game is not paused
+            self.animation_timer += 1/60  # Increment by a fixed time step
 
         self.update_eyes()  # Add this line near the start
         
@@ -896,22 +906,29 @@ Position: ({self.x}, {self.y})"""
 
             # 7. Happy animation (lowest priority)
             elif self.happiness > 80 and not self.sleeping:
-                # Floating heart animation
-                angle = self.animation_timer * 3
-                x_offset = math.cos(angle) * 5
-                y_offset = math.sin(angle) * 5
-                
-                heart_label = pyglet.text.Label(
-                    "♥",
-                    font_name='Arial',
-                    font_size=ICON_SIZE // 2,
-                    x=icon_x + x_offset,
-                    y=icon_y + y_offset,
-                    anchor_x='center',
-                    anchor_y='center',
-                    color=(255, 150, 150, 200)
-                )
-                heart_label.draw()
+                # Only update animation if game is not paused (FPS > 0)
+                if FPS > 0:  
+                    # Create a smooth circular motion
+                    continuous_angle = (self.animation_timer * HEART_ANIMATION_SPEED + self.heart_animation_offset) % (2 * math.pi)
+                    
+                    # Create a smooth circular motion
+                    x_offset = math.cos(continuous_angle) * 3
+                    y_offset = math.sin(continuous_angle) * 3
+                    
+                    # Smooth opacity transition using the same angle
+                    opacity = int(180 + 75 * math.sin(continuous_angle))
+                    
+                    heart_label = pyglet.text.Label(
+                        "♥",
+                        font_name='Arial',
+                        font_size=ICON_SIZE // 2,
+                        x=icon_x + x_offset,
+                        y=icon_y + y_offset,
+                        anchor_x='center',
+                        anchor_y='center',
+                        color=(255, 150, 150, opacity)
+                    )
+                    heart_label.draw()
 
         # Add eyes after the main creature body is drawn
         if not isinstance(self.color, str):  # Make sure we have a valid color
