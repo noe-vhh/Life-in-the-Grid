@@ -6,7 +6,7 @@ import math
 WIDTH = 1200
 HEIGHT = 900
 GRID_SIZE = 50
-SIDEBAR_WIDTH = 200        # Make sure sidebar is wide enough
+SIDEBAR_WIDTH = 280
 FPS = 0  # Initial FPS (paused)
 MIN_FPS = 1
 MAX_FPS = 60
@@ -15,12 +15,11 @@ NEST_CENTER_Y = HEIGHT // 2
 FOOD_STORAGE_RADIUS = 5 * GRID_SIZE
 NURSERY_RADIUS = 3 * GRID_SIZE
 SLEEPING_RADIUS = 4 * GRID_SIZE
-CONTROL_PANEL_HEIGHT = 60  # Just enough for buttons
-STATS_PANEL_HEIGHT = 160   # Reduced height since we removed labels
-LEGEND_PANEL_HEIGHT = 380  # Tall enough for all legend items
-TOP_MARGIN = 5           # Small top margin
-PANEL_SPACING = 8         # Increased spacing to prevent overlap
-SIDE_MARGIN = 10        # Content margin from panel edge
+CONTROL_PANEL_HEIGHT = 90
+STATS_PANEL_HEIGHT = 220
+LEGEND_PANEL_HEIGHT = 520
+TOP_MARGIN = 15
+PANEL_SPACING = 15
 
 # Update Constants with refined sizes and spacing
 SIDEBAR_WIDTH = 280        # Slightly wider for better text display
@@ -105,58 +104,6 @@ PATTERN_COLORS = [
     (230, 230, 255)   # Light Blue
 ]
 
-# Add near other UI constants
-LOADING_BAR_WIDTH = 120
-LOADING_BAR_HEIGHT = 15
-LOADING_BAR_PADDING = 5
-LOADING_BAR_COLORS = {
-    'health': (255, 50, 50),    # Red
-    'energy': (50, 150, 255),   # Blue
-    'hunger': (255, 200, 50),   # Yellow
-    'happiness': (255, 100, 255) # Pink
-}
-
-class LoadingBar:
-    def __init__(self, x, y, width, height, label, color):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.label = label
-        self.value = 0
-        self.color = color
-        self.extra_text = ""  # Add this field
-
-    def update_value(self, value, extra_text=""):
-        self.value = min(100, max(0, value))  # Clamp between 0 and 100
-        self.extra_text = extra_text  # Store extra text
-
-    def draw(self):
-        # Draw label
-        pyglet.text.Label(
-            f"{self.label}: {int(self.value)}%{self.extra_text}",  # Add extra text here
-            x=self.x,
-            y=self.y + self.height + 5,
-            anchor_y='bottom',
-            color=(255, 255, 255, 255)
-        ).draw()
-
-        # Draw background
-        pyglet.shapes.Rectangle(
-            self.x, self.y,
-            self.width, self.height,
-            color=(50, 50, 50)
-        ).draw()
-
-        # Draw filled portion
-        if self.value > 0:
-            fill_width = (self.value / 100) * self.width
-            pyglet.shapes.Rectangle(
-                self.x, self.y,
-                fill_width, self.height,
-                color=self.color
-            ).draw()
-
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -178,15 +125,15 @@ class Panel:
         pyglet.shapes.BorderedRectangle(self.x, self.y, self.width, self.height,
                                       border=2, color=(40, 40, 40), 
                                       border_color=(100, 100, 100)).draw()
-        # Draw centered title if exists
+        # Draw title if exists
         if self.title:
             pyglet.text.Label(self.title,
                             font_name='Arial',
                             font_size=12,
                             bold=True,
-                            x=self.x + self.width//2,
+                            x=self.x + 10,
                             y=self.y + self.height - 20,
-                            anchor_x='center',  # Changed from 'left' to 'center'
+                            anchor_x='left',
                             anchor_y='center').draw()
 
 # Create a simple slider class
@@ -268,6 +215,19 @@ legend_panel = Panel(
     "Legend"
 )
 
+# Create stats label
+stats_label = pyglet.text.Label(
+    "No creature selected",
+    font_name='Arial',
+    font_size=10,
+    x=WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15,
+    y=stats_panel.y + stats_panel.height - 40,
+    width=SIDEBAR_WIDTH - 30,
+    multiline=True,
+    anchor_x='left',
+    anchor_y='top'
+)
+
 # THEN create the button sprites with pause initially clicked
 pause_button = pyglet.sprite.Sprite(
     pause_clicked_image,  # Start with clicked image
@@ -301,9 +261,6 @@ INDICATOR_BORDER_WIDTH = 2
 SELECTION_RING_SIZE = 4
 STATUS_RING_SIZE = 2
 INNER_CIRCLE_RATIO = 0.6  # Size of inner circle relative to main body
-
-# Near the top of the file with other global variables
-stats_bars = None  # Initialize as None
 
 class Creature:
     def __init__(self, x, y, environment, health=100, energy=100):
@@ -745,6 +702,691 @@ class Creature:
 Cause: {self.death_cause}
 Remaining Food: {self.food_value/2}%
 Position: ({self.x}, {self.y})"""
+        else:
+            status = []
+            if self.sleeping:
+                status.append("Sleeping")
+            if self.eating:
+                status.append("Eating")
+            if self.has_laid_egg:
+                status.append("Has unhatched egg")
+            if self.age > self.max_age * 0.7:
+                status.append("(!) Elderly")  # Changed from emoji to standard characters
+            
+            age_percent = (self.age / self.max_age) * 100
+            
+            return f"""Health: {self.health}%
+Energy: {self.energy}%
+Hunger: {self.hunger}%
+Happiness: {round(self.happiness)}%
+Age: {self.age} ({round(age_percent, 1)}% of lifespan)
+Max Age: {self.max_age}
+Mature: {'Yes' if self.mature else 'No'}
+Status: {', '.join(status) if status else 'Active'}
+Position: ({self.x}, {self.y})"""
+
+    def eat(self, food_source):
+        """Consume some food from a dead creature when adjacent to it"""
+        if (not self.dead and food_source.dead and food_source.food_value > 0 and
+            not self.sleeping and self.hunger < 100):
+            # Check if we're adjacent to the food source
+            dx = abs(self.x - food_source.x)
+            dy = abs(self.y - food_source.y)
+            if dx + dy == 1:  # Must be exactly one space away (no diagonals)
+                # Set eating state
+                self.eating = True
+                self.target = None  # Clear any other targets
+                
+                # Process the eating action
+                food_amount = min(40, food_source.food_value)
+                food_source.food_value -= food_amount
+                self.hunger = min(100, self.hunger + food_amount * 1.5)
+                self.color = (255, 200, 0)  # Yellow while eating
+                
+                # Don't reset eating state here - let update() handle it
+                return True
+        return False
+
+    def draw(self, batch):
+        shapes = []
+        center_x = self.x * GRID_SIZE + GRID_SIZE // 2
+        center_y = self.y * GRID_SIZE + GRID_SIZE // 2
+        base_radius = GRID_SIZE // 2
+
+        # Calculate breathing effect
+        breath_amount = DEAD_BREATH_AMOUNT if self.dead else BREATH_AMOUNT
+        # Use a smaller multiplier for the animation timer to slow down the breathing
+        breath_scale = 1.0 + math.sin(self.animation_timer * BREATH_SPEED * math.pi + self.breath_offset) * breath_amount
+
+        # Apply breathing to base_radius
+        current_radius = base_radius * breath_scale
+
+        # 1. Selection indicator (white ring, outermost)
+        if self.selected:
+            shapes.append(pyglet.shapes.Circle(
+                center_x, center_y,
+                current_radius + SELECTION_RING_SIZE,  # Apply breathing to selection ring
+                color=(255, 255, 255, 180),
+                batch=batch
+            ))
+
+        # 2. Critical status indicator (red ring)
+        if not self.dead and (self.hunger < 30 or self.energy < 30 or self.health < 30):
+            shapes.append(pyglet.shapes.Circle(
+                center_x, center_y,
+                current_radius + STATUS_RING_SIZE,  # Apply breathing to status ring
+                color=(255, 0, 0, 200),
+                batch=batch
+            ))
+
+        # 3. Main body
+        if self.dead:
+            # Base circle for dead creature
+            shapes.append(pyglet.shapes.Circle(
+                center_x, center_y,
+                current_radius,  # Apply breathing
+                color=(100, 0, 0),  # Dark red base
+                batch=batch
+            ))
+            
+            # Food value indicator (arc) with updated color scheme
+            if self.food_value > 0:
+                food_percentage = self.food_value / 200
+                # Use a more muted green for the food indicator
+                shapes.append(pyglet.shapes.Arc(
+                    center_x, center_y,
+                    current_radius * 0.8,  # Apply breathing to food indicator
+                    color=(120, 150, 0),  # Muted green-brown color
+                    batch=batch,
+                    angle=food_percentage * 6.28319  # 2*pi for full circle
+                ))
+        else:
+            # Living creature main body
+            shapes.append(pyglet.shapes.Circle(
+                center_x, center_y,
+                current_radius,  # Apply breathing
+                color=self.color,
+                batch=batch
+            ))
+
+            # 4. Age indicator (inner circle)
+            if self.mature:
+                age_factor = self.age / self.max_age
+                inner_radius = current_radius * INNER_CIRCLE_RATIO  # Apply breathing to inner circle
+                
+                # Color transitions from green to yellow to red with age
+                if age_factor < 0.5:
+                    # Young adult: green to yellow
+                    green = 255
+                    red = int(255 * (age_factor * 2))
+                else:
+                    # Elder: yellow to red
+                    red = 255
+                    green = int(255 * (2 - age_factor * 2))
+                    
+                shapes.append(pyglet.shapes.Circle(
+                    center_x, center_y,
+                    inner_radius,
+                    color=(red, green, 0, 230),
+                    batch=batch
+                ))
+
+        # Add texture pattern after drawing main body but before other features
+        if not self.dead and self.pattern != "plain":
+            pattern_shapes = self.draw_pattern(center_x, center_y, current_radius, batch)
+            shapes.extend(pattern_shapes)
+
+        # Add status icons animation
+        if not self.dead:
+            # Only update animation if game is not paused (FPS > 0)
+            if FPS > 0:  
+                self.animation_timer += ICON_ANIMATION_SPEED
+                if self.animation_timer >= 1:
+                    self.animation_timer = 0
+                    self.animation_frame = (self.animation_frame + 1) % 3
+
+            icon_x = self.x * GRID_SIZE + GRID_SIZE // 2
+            icon_y = self.y * GRID_SIZE + GRID_SIZE + ICON_OFFSET_Y
+
+            # 1. Eating animation (highest priority - always show when eating)
+            if self.eating:
+                icon_color = (255, 200, 0, 255)
+                if self.animation_frame == 0:
+                    angle = 15
+                elif self.animation_frame == 1:
+                    angle = 0
+                else:
+                    angle = -15
+
+                fork_height = ICON_SIZE
+                fork_width = ICON_SIZE // 3
+                
+                cx = icon_x
+                cy = icon_y
+                
+                rotated_rect = pyglet.shapes.Rectangle(
+                    cx - fork_width//2,
+                    cy - fork_height//2,
+                    fork_width,
+                    fork_height,
+                    color=icon_color,
+                    batch=batch
+                )
+                rotated_rect.rotation = angle
+                shapes.append(rotated_rect)
+
+            # 2. Hunger exclamation animation
+            elif self.hunger < 30 and self.target == "food":
+                y_offset = math.sin(self.animation_timer * 3) * 5  # Bobbing motion
+                hungry_label = pyglet.text.Label(
+                    "!",
+                    font_name='Arial',
+                    font_size=ICON_SIZE,
+                    bold=True,
+                    x=icon_x,
+                    y=icon_y + y_offset,
+                    anchor_x='center',
+                    anchor_y='center',
+                    color=(255, 100, 100, 255)
+                )
+                hungry_label.draw()
+
+            # 3. Egg laying animation
+            elif (not self.has_laid_egg and self.mature and 
+                self.target == "nursery"):
+                # Pulsing effect
+                scale = 1 + math.sin(self.animation_timer * 3) * 0.2
+                egg_size = ICON_SIZE // 2 * scale
+                
+                shapes.append(pyglet.shapes.Circle(
+                    icon_x,
+                    icon_y,
+                    egg_size,
+                    color=(255, 200, 0, 200),  # Match egg color
+                    batch=batch
+                ))
+
+            # 4. Low energy animation
+            elif self.energy < 30 and not self.eating and not (self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping")):
+                # Flashing effect
+                alpha = 255 if self.animation_frame < 2 else 180
+                battery_width = ICON_SIZE
+                battery_height = ICON_SIZE // 2
+                
+                # Battery outline
+                shapes.append(pyglet.shapes.Rectangle(
+                    icon_x - battery_width//2,
+                    icon_y - battery_height//2,
+                    battery_width,
+                    battery_height,
+                    color=(100, 100, 100, alpha),
+                    batch=batch
+                ))
+                
+                # Dynamic battery level
+                battery_level = max(1, int((self.energy / 30) * (battery_width - 4)))
+                shapes.append(pyglet.shapes.Rectangle(
+                    icon_x - battery_width//2 + 2,
+                    icon_y - battery_height//2 + 2,
+                    battery_level,
+                    battery_height - 4,
+                    color=(255, 0, 0, alpha),
+                    batch=batch
+                ))
+
+            # 5. Carrying food animation
+            elif self.carrying_food:
+                # Draw package icon
+                package_size = ICON_SIZE // 2
+                y_offset = math.sin(self.animation_timer * 3) * 3  # Slight bobbing
+
+                # Package outline
+                shapes.append(pyglet.shapes.Rectangle(
+                    icon_x - package_size//2,
+                    icon_y + y_offset - package_size//2,
+                    package_size,
+                    package_size,
+                    color=(200, 150, 50),  # Brown color
+                    batch=batch
+                ))
+
+                # Package cross lines
+                shapes.append(pyglet.shapes.Line(
+                    icon_x - package_size//2,
+                    icon_y + y_offset,
+                    icon_x + package_size//2,
+                    icon_y + y_offset,
+                    color=(150, 100, 0),
+                    batch=batch
+                ))
+                shapes.append(pyglet.shapes.Line(
+                    icon_x,
+                    icon_y + y_offset - package_size//2,
+                    icon_x,
+                    icon_y + y_offset + package_size//2,
+                    color=(150, 100, 0),
+                    batch=batch
+                ))
+
+            # 6. Sleep animation
+            elif self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping"):
+                z_size = ICON_SIZE // 2
+                for i in range(3):
+                    if i <= self.animation_frame:
+                        z_label = pyglet.text.Label(
+                            "Z",
+                            font_name='Arial',
+                            font_size=z_size,
+                            bold=True,
+                            x=icon_x + (i * z_size//2),
+                            y=icon_y + (i * z_size//2),
+                            anchor_x='center',
+                            anchor_y='center',
+                            color=(200, 200, 255, 255)
+                        )
+                        z_label.draw()
+
+            # 7. Happy animation (lowest priority)
+            elif self.happiness > 80 and not self.sleeping:
+                # Only update animation if game is not paused (FPS > 0)
+                if FPS > 0:  
+                    # Create a smooth circular motion
+                    continuous_angle = (self.animation_timer * HEART_ANIMATION_SPEED + self.heart_animation_offset) % (2 * math.pi)
+                    
+                    # Create a smooth circular motion
+                    x_offset = math.cos(continuous_angle) * 3
+                    y_offset = math.sin(continuous_angle) * 3
+                    
+                    # Smooth opacity transition using the same angle
+                    opacity = int(180 + 75 * math.sin(continuous_angle))
+                    
+                    heart_label = pyglet.text.Label(
+                        "♥",
+                        font_name='Arial',
+                        font_size=ICON_SIZE // 2,
+                        x=icon_x + x_offset,
+                        y=icon_y + y_offset,
+                        anchor_x='center',
+                        anchor_y='center',
+                        color=(255, 150, 150, opacity)
+                    )
+                    heart_label.draw()
+
+        # Add eyes after the main creature body is drawn
+        if not isinstance(self.color, str):  # Make sure we have a valid color
+            center_x = self.x * GRID_SIZE + GRID_SIZE // 2
+            center_y = self.y * GRID_SIZE + GRID_SIZE // 2
+            base_radius = GRID_SIZE // 2
+            
+            # Calculate eye positions
+            left_eye_x = center_x - EYE_SPACING
+            right_eye_x = center_x + EYE_SPACING
+            eye_y = center_y + EYE_OFFSET_Y
+            
+            if self.dead:
+                # Draw X eyes for dead creatures
+                for eye_x in [left_eye_x, right_eye_x]:
+                    # Draw X lines
+                    shapes.extend([
+                        pyglet.shapes.Line(
+                            eye_x - EYE_SIZE, eye_y + EYE_SIZE,
+                            eye_x + EYE_SIZE, eye_y - EYE_SIZE,
+                            color=(0, 0, 0),
+                            batch=batch,
+                            width=2
+                        ),
+                        pyglet.shapes.Line(
+                            eye_x - EYE_SIZE, eye_y - EYE_SIZE,
+                            eye_x + EYE_SIZE, eye_y + EYE_SIZE,
+                            color=(0, 0, 0),
+                            batch=batch,
+                            width=2
+                        )
+                    ])
+            else:
+                # Draw normal eyes
+                for eye_x in [left_eye_x, right_eye_x]:
+                    if self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping"):
+                        # Draw closed eyes (horizontal lines) only when actually sleeping in the sleeping area
+                        shapes.append(
+                            pyglet.shapes.Line(
+                                eye_x - EYE_SIZE, eye_y,
+                                eye_x + EYE_SIZE, eye_y,
+                                color=(0, 0, 0),
+                                batch=batch,
+                                width=2
+                            )
+                        )
+                    elif self.is_blinking:
+                        # Draw blinking eyes (shorter horizontal lines, similar to sleeping)
+                        shapes.append(
+                            pyglet.shapes.Line(
+                                eye_x - EYE_SIZE, eye_y,
+                                eye_x + EYE_SIZE, eye_y,
+                                color=(0, 0, 0),
+                                batch=batch,
+                                width=2
+                            )
+                        )
+                    else:
+                        # Draw open eyes (white background with black pupil)
+                        shapes.append(
+                            pyglet.shapes.Circle(
+                                eye_x, eye_y,
+                                EYE_SIZE + 2,  # Larger white area
+                                color=(255, 255, 255),
+                                batch=batch
+                            )
+                        )
+                        
+                        # Calculate pupil offset based on target or movement direction
+                        pupil_offset_x = 0
+                        pupil_offset_y = 0
+                        
+                        if self.target:
+                            if isinstance(self.target, (Creature, Egg)):
+                                # Look at target creature/egg
+                                dx = self.target.x - self.x
+                                dy = self.target.y - self.y
+                            elif self.target in ["sleeping", "nursery", "food"]:
+                                # Look towards area center
+                                center = self.env.get_area_center(self.target)
+                                dx = (center[0] / GRID_SIZE) - self.x
+                                dy = (center[1] / GRID_SIZE) - self.y
+                            else:
+                                dx = dy = 0
+                            
+                            # Normalize direction to maximum pupil range
+                            if dx != 0 or dy != 0:
+                                magnitude = (dx * dx + dy * dy) ** 0.5
+                                pupil_offset_x = (dx / magnitude) * PUPIL_RANGE
+                                pupil_offset_y = (dy / magnitude) * PUPIL_RANGE
+                        
+                        # Draw pupil with offset
+                        shapes.append(
+                            pyglet.shapes.Circle(
+                                eye_x + pupil_offset_x,
+                                eye_y + pupil_offset_y,
+                                PUPIL_SIZE,
+                                color=(0, 0, 0),
+                                batch=batch
+                            )
+                        )
+    
+        # Draw antennae
+        # Only living creatures have antennae
+        if not self.dead:
+            # Calculate base positions for antennae
+            antenna_base_y = center_y + base_radius - 2  # Slightly below top of head
+            left_base_x = center_x - ANTENNA_SPACING // 2
+            right_base_x = center_x + ANTENNA_SPACING // 2
+
+            # Calculate wave effect
+            wave = math.sin(self.animation_timer * ANTENNA_WAVE_SPEED) * ANTENNA_WAVE_AMOUNT
+            # Add extra wave when moving or targeting
+            if self.target or self.carrying_food:
+                wave *= 1.5  # More movement when active
+
+            # Draw left antenna
+            left_tip_x = left_base_x - math.sin(wave) * ANTENNA_LENGTH
+            left_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
+            shapes.append(pyglet.shapes.Line(
+                left_base_x, antenna_base_y,
+                left_tip_x, left_tip_y,
+                width=ANTENNA_WIDTH,
+                color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+                batch=batch
+            ))
+
+            # Draw right antenna
+            right_tip_x = right_base_x + math.sin(wave) * ANTENNA_LENGTH
+            right_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
+            shapes.append(pyglet.shapes.Line(
+                right_base_x, antenna_base_y,
+                right_tip_x, right_tip_y,
+                width=ANTENNA_WIDTH,
+                color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+                batch=batch
+            ))
+
+            # Draw small dots at antenna tips
+            tip_size = ANTENNA_WIDTH // 2
+            shapes.extend([
+                pyglet.shapes.Circle(
+                    left_tip_x, left_tip_y,
+                    tip_size,
+                    color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+                    batch=batch
+                ),
+                pyglet.shapes.Circle(
+                    right_tip_x, right_tip_y,
+                    tip_size,
+                    color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+                    batch=batch
+                )
+            ])
+        else:
+            # Dead creature antennae (drooping and darker color)
+            antenna_base_y = center_y + base_radius - 2
+            left_base_x = center_x - ANTENNA_SPACING // 2
+            right_base_x = center_x + ANTENNA_SPACING // 2
+
+            # Calculate drooping effect for dead antennae
+            droop_angle = -math.pi / 4  # 45 degrees downward
+
+            # Draw left antenna (drooping)
+            left_tip_x = left_base_x - math.cos(droop_angle) * ANTENNA_LENGTH
+            left_tip_y = antenna_base_y - math.sin(droop_angle) * ANTENNA_LENGTH
+            shapes.append(pyglet.shapes.Line(
+                left_base_x, antenna_base_y,
+                left_tip_x, left_tip_y,
+                width=ANTENNA_WIDTH,
+                color=(80, 0, 0),  # Darker red for dead creature
+                batch=batch
+            ))
+
+            # Draw right antenna (drooping)
+            right_tip_x = right_base_x + math.cos(droop_angle) * ANTENNA_LENGTH
+            right_tip_y = antenna_base_y - math.sin(droop_angle) * ANTENNA_LENGTH
+            shapes.append(pyglet.shapes.Line(
+                right_base_x, antenna_base_y,
+                right_tip_x, right_tip_y,
+                width=ANTENNA_WIDTH,
+                color=(80, 0, 0),  # Darker red for dead creature
+                batch=batch
+            ))
+
+            # Draw small dots at antenna tips (darker for dead)
+            tip_size = ANTENNA_WIDTH // 2
+            shapes.extend([
+                pyglet.shapes.Circle(
+                    left_tip_x, left_tip_y,
+                    tip_size,
+                    color=(80, 0, 0),  # Darker red for dead creature
+                    batch=batch
+                ),
+                pyglet.shapes.Circle(
+                    right_tip_x, right_tip_y,
+                    tip_size,
+                    color=(80, 0, 0),  # Darker red for dead creature
+                    batch=batch
+                )
+            ])
+
+        # Add this after drawing the main body but before status icons
+        if not self.dead:
+            # Calculate mouth position
+            mouth_x = center_x
+            mouth_y = center_y + MOUTH_Y_OFFSET
+            
+            if self.eating:
+                # Open mouth for eating
+                shapes.append(pyglet.shapes.Rectangle(
+                    mouth_x - MOUTH_WIDTH//2,
+                    mouth_y - self.mouth_open_amount//2,
+                    MOUTH_WIDTH,
+                    self.mouth_open_amount,
+                    color=(0, 0, 0),
+                    batch=batch
+                ))
+                
+                # Mouth outline
+                shapes.append(pyglet.shapes.BorderedRectangle(
+                    mouth_x - MOUTH_WIDTH//2,
+                    mouth_y - self.mouth_open_amount//2,
+                    MOUTH_WIDTH,
+                    self.mouth_open_amount,
+                    border=1,
+                    color=(0, 0, 0),
+                    border_color=(50, 50, 50),
+                    batch=batch
+                ))
+            else:
+                # Different mouth expressions based on state
+                points = []
+                
+                if self.health < 30 or self.hunger < 30 or self.energy < 30:
+                    # Worried/concerned expression (inverted curve)
+                    points = [
+                        (mouth_x - MOUTH_WIDTH//2, mouth_y),
+                        (mouth_x, mouth_y + SMILE_CURVE),
+                        (mouth_x + MOUTH_WIDTH//2, mouth_y)
+                    ]
+                elif self.happiness > 80:
+                    # Happy smile (curved down)
+                    points = [
+                        (mouth_x - MOUTH_WIDTH//2, mouth_y),
+                        (mouth_x, mouth_y - SMILE_CURVE),
+                        (mouth_x + MOUTH_WIDTH//2, mouth_y)
+                    ]
+                else:
+                    # Neutral expression (straight line)
+                    points = [
+                        (mouth_x - MOUTH_WIDTH//2, mouth_y),
+                        (mouth_x, mouth_y),
+                        (mouth_x + MOUTH_WIDTH//2, mouth_y)
+                    ]
+                
+                # Draw the mouth curve
+                shapes.append(pyglet.shapes.Line(
+                    points[0][0], points[0][1],
+                    points[1][0], points[1][1],
+                    color=(0, 0, 0),
+                    batch=batch,
+                    width=2
+                ))
+                shapes.append(pyglet.shapes.Line(
+                    points[1][0], points[1][1],
+                    points[2][0], points[2][1],
+                    color=(0, 0, 0),
+                    batch=batch,
+                    width=2
+                ))
+        else:
+            # Straight line for dead creatures
+            mouth_x = center_x
+            mouth_y = center_y + MOUTH_Y_OFFSET
+            
+            shapes.append(pyglet.shapes.Line(
+                mouth_x - MOUTH_WIDTH//2, mouth_y,
+                mouth_x + MOUTH_WIDTH//2, mouth_y,
+                color=(50, 0, 0),
+                batch=batch,
+                width=2
+            ))
+
+        return shapes
+
+    def update_eyes(self):
+        """Update eye animation state"""
+        if not self.dead and not (self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping")):
+            self.blink_timer -= 1  # Decrement by 1 frame instead of 1/60
+            if self.blink_timer <= 0:
+                if not self.is_blinking:
+                    self.is_blinking = True
+                    self.blink_timer = BLINK_DURATION
+                else:
+                    self.is_blinking = False
+                    self.blink_timer = BLINK_INTERVAL + random.randint(-2, 2)  # Add some randomness
+
+    def update_mouth(self):
+        """Update mouth animation state"""
+        if self.dead:
+            # Dead creatures have a static slightly open mouth
+            self.mouth_open_amount = 2
+            return
+        
+        if self.eating:
+            # Chewing animation
+            self.is_chewing = True
+            self.chew_timer += MOUTH_OPEN_SPEED
+            self.target_mouth_open = (math.sin(self.chew_timer * 4) * 0.5 + 0.5) * MAX_MOUTH_OPEN
+        elif self.sleeping:
+            # Slightly open mouth when sleeping (breathing)
+            self.target_mouth_open = 2 + math.sin(self.animation_timer) * 1
+        else:
+            # Normal state - occasional mouth movements
+            if random.random() < 0.01:  # Random chance to open/close mouth
+                self.target_mouth_open = random.uniform(0, 3)
+        
+        # Smoothly animate towards target
+        if self.mouth_open_amount < self.target_mouth_open:
+            self.mouth_open_amount = min(self.mouth_open_amount + MOUTH_OPEN_SPEED, self.target_mouth_open)
+        elif self.mouth_open_amount > self.target_mouth_open:
+            self.mouth_open_amount = max(self.mouth_open_amount - MOUTH_OPEN_SPEED, self.target_mouth_open)
+
+    def draw_pattern(self, center_x, center_y, radius, batch):
+        """Draw the creature's texture pattern"""
+        shapes = []
+        pattern_info = TEXTURE_PATTERNS[self.pattern]
+        
+        if self.pattern == "dots":
+            density = pattern_info["density"]
+            dot_size = radius * 0.15 * self.pattern_scale
+            for i in range(density):
+                angle = (i / density * 2 * math.pi + self.pattern_offset) % (2 * math.pi)
+                dist = radius * 0.6  # Keep dots within 60% of radius
+                x = center_x + math.cos(angle) * dist
+                y = center_y + math.sin(angle) * dist
+                shapes.append(pyglet.shapes.Circle(
+                    x, y, dot_size,
+                    color=self.pattern_color,
+                    batch=batch
+                ))
+
+        elif self.pattern == "stripes":
+            density = pattern_info["density"]
+            stripe_width = radius * 0.15 * self.pattern_scale
+            for i in range(density):
+                angle = (i / density * math.pi + self.pattern_offset) % math.pi
+                shapes.append(pyglet.shapes.Line(
+                    center_x - radius * math.cos(angle),
+                    center_y - radius * math.sin(angle),
+                    center_x + radius * math.cos(angle),
+                    center_y + radius * math.sin(angle),
+                    width=stripe_width,
+                    color=self.pattern_color,
+                    batch=batch
+                ))
+
+        elif self.pattern == "spots":
+            density = pattern_info["density"]
+            spot_size = radius * 0.25 * self.pattern_scale
+            for i in range(density):
+                angle = (i / density * 2 * math.pi + self.pattern_offset) % (2 * math.pi)
+                dist = radius * random.uniform(0.2, 0.7)  # Random distance from center
+                spot_x = center_x + math.cos(angle) * dist
+                spot_y = center_y + math.sin(angle) * dist
+                
+                # Create a simpler circular spot instead of polygon
+                shapes.append(pyglet.shapes.Circle(
+                    spot_x, spot_y,
+                    spot_size * random.uniform(0.8, 1.2),  # Random size variation
+                    color=self.pattern_color,
+                    batch=batch
+                ))
+
+        return shapes
 
 # The environment where creatures live
 class Environment:
@@ -990,7 +1632,7 @@ class Environment:
             if cell not in self.spatial_grid:
                 self.spatial_grid[cell] = []
             self.spatial_grid[cell].append(creature)
-        
+
     def get_area_center(self, area_type):
         """Get the center coordinates for different colony areas with fixed positions"""
         if area_type == "food":
@@ -1458,7 +2100,7 @@ legend_labels = [
     ("Normal Creature", (0, 255, 0)),
     ("Dead Creature (with food)", "dead_with_food"),
     ("Dead Creature (depleted)", (100, 0, 0)),
-    ("Waiting for Egg to Hatch", (255, 200, 0)),
+    ("Egg", (255, 200, 0)),
     
     # Group 2: Age Indicators
     ("Age Indicators", "header"),
@@ -1475,86 +2117,41 @@ legend_labels = [
     ("Ready to Lay Egg", (255, 200, 0))  # Changed to match egg color
 ]
 
-# Initialize the stats bars
-stats_bars = {
-    'age': LoadingBar(
-        WIDTH - SIDEBAR_WIDTH + 15,
-        stats_panel.y + stats_panel.height - 140,
-        LOADING_BAR_WIDTH, LOADING_BAR_HEIGHT,
-        "Age", (255, 200, 50)  # Yellow color for age bar
-    ),
-    'health': LoadingBar(
-        WIDTH - SIDEBAR_WIDTH + 15,
-        stats_panel.y + stats_panel.height - 160,
-        LOADING_BAR_WIDTH, LOADING_BAR_HEIGHT,
-        "Health", LOADING_BAR_COLORS['health']
-    ),
-    'energy': LoadingBar(
-        WIDTH - SIDEBAR_WIDTH + 15,
-        stats_panel.y + stats_panel.height - 180,
-        LOADING_BAR_WIDTH, LOADING_BAR_HEIGHT,
-        "Energy", LOADING_BAR_COLORS['energy']
-    ),
-    'hunger': LoadingBar(
-        WIDTH - SIDEBAR_WIDTH + 15,
-        stats_panel.y + stats_panel.height - 200,
-        LOADING_BAR_WIDTH, LOADING_BAR_HEIGHT,
-        "Hunger", LOADING_BAR_COLORS['hunger']
-    ),
-    'happiness': LoadingBar(
-        WIDTH - SIDEBAR_WIDTH + 15,
-        stats_panel.y + stats_panel.height - 220,
-        LOADING_BAR_WIDTH, LOADING_BAR_HEIGHT,
-        "Happiness", LOADING_BAR_COLORS['happiness']
-    )
-}
-
 def update_ui_positions():
     """Update all UI element positions with refined spacing"""
     # Calculate positions from top-right
     start_y = HEIGHT - TOP_MARGIN
-    panel_x = WIDTH - SIDEBAR_WIDTH + 5
-    panel_center_x = panel_x + (SIDEBAR_WIDTH // 2)  # Center point of panels
     
-    # Control Panel (top)
-    control_panel.update_position(panel_x, start_y - CONTROL_PANEL_HEIGHT)
+    # Update panel positions
+    control_panel.update_position(
+        WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
+        start_y - CONTROL_PANEL_HEIGHT
+    )
     
-    # Center buttons in control panel
-    button_y = control_panel.y + 10
-    total_buttons_width = (45 * 2) + 38  # 2 spaces between 3 buttons + button width
-    first_button_x = panel_center_x - (total_buttons_width // 2)
+    stats_panel.update_position(
+        WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
+        start_y - CONTROL_PANEL_HEIGHT - PANEL_SPACING - STATS_PANEL_HEIGHT
+    )
     
-    pause_button.x = first_button_x
-    pause_button.y = button_y
-    play_button.x = first_button_x + 45
-    play_button.y = button_y
-    fast_forward_button.x = first_button_x + 90
-    fast_forward_button.y = button_y
+    legend_panel.update_position(
+        WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
+        start_y - CONTROL_PANEL_HEIGHT - PANEL_SPACING - 
+        STATS_PANEL_HEIGHT - PANEL_SPACING - LEGEND_PANEL_HEIGHT
+    )
     
-    # Stats Panel (middle)
-    stats_y = control_panel.y - PANEL_SPACING - STATS_PANEL_HEIGHT
-    stats_panel.update_position(panel_x, stats_y)
+    # Update buttons to be below the "Controls" label
+    pause_button.x = WIDTH - SIDEBAR_WIDTH + 15
+    pause_button.y = control_panel.y + control_panel.height - 75
     
-    # Status section (icons) - moved higher in the panel
-    status_y = stats_panel.y + STATS_PANEL_HEIGHT - 30
+    play_button.x = WIDTH - SIDEBAR_WIDTH + 75
+    play_button.y = control_panel.y + control_panel.height - 75
     
-    # Center all bars with consistent spacing
-    bar_spacing = 25  # Increased spacing between bars
-    bar_start_y = status_y - 80  # Increased gap between icons and first bar
-    bar_x = panel_center_x - (LOADING_BAR_WIDTH // 2)
+    fast_forward_button.x = WIDTH - SIDEBAR_WIDTH + 135
+    fast_forward_button.y = control_panel.y + control_panel.height - 75
     
-    # Position all bars in sequence with consistent spacing
-    age_percent = (selected_creature.age / selected_creature.max_age) * 100
-    
-    stats_bars['health'].update_position(bar_x, bar_start_y)
-    stats_bars['energy'].update_position(bar_x, bar_start_y - bar_spacing)
-    stats_bars['hunger'].update_position(bar_x, bar_start_y - (bar_spacing * 2))
-    stats_bars['happiness'].update_position(bar_x, bar_start_y - (bar_spacing * 3))
-    stats_bars['age'].update_value(age_percent, f"({selected_creature.age})")
-    
-    # Legend Panel (bottom) with more spacing
-    legend_y = stats_y - (PANEL_SPACING * 2) - LEGEND_PANEL_HEIGHT
-    legend_panel.update_position(panel_x, legend_y)
+    # Update stats label with more space from top of panel
+    stats_label.x = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15
+    stats_label.y = stats_panel.y + stats_panel.height - 40
 
 @window.event
 def on_draw():
@@ -1670,146 +2267,10 @@ def on_draw():
         y_offset -= LEGEND_ITEM_SPACING
     
     env.draw(window)
-    
-    # Update and draw stats
-    if selected_creature:
-        if not selected_creature.dead:
-            # Update loading bar values
-            age_percent = (selected_creature.age / selected_creature.max_age) * 100
-            stats_bars['age'].update_value(age_percent, f"({selected_creature.age})")  # Add age value
-            stats_bars['health'].update_value(selected_creature.health)
-            stats_bars['energy'].update_value(selected_creature.energy)
-            stats_bars['hunger'].update_value(selected_creature.hunger)
-            stats_bars['happiness'].update_value(selected_creature.happiness)
-            
-            # Draw loading bars
-            for bar in stats_bars.values():
-                bar.draw()
-    
+    stats_label.draw()
     pause_button.draw()
     play_button.draw()
     fast_forward_button.draw()
-    
-    # Draw status icons and bars for selected creature
-    if selected_creature:
-        if not selected_creature.dead:
-            # Draw status icons at the top of stats panel
-            icon_y = stats_panel.y + STATS_PANEL_HEIGHT - 60
-            icon_spacing = 30
-            icon_size = 16  # Standardized size for all icons
-            
-            # Calculate panel center x (same as in update_ui_positions)
-            panel_x = WIDTH - SIDEBAR_WIDTH + 5
-            panel_center_x = panel_x + (SIDEBAR_WIDTH // 2)
-            
-            # Calculate starting x position to center all icons
-            num_possible_icons = 5  # Maximum number of icons that could appear
-            total_width = (num_possible_icons - 1) * icon_spacing
-            start_x = panel_center_x - (total_width // 2)
-
-            # Draw status icons based on creature state
-            if selected_creature.sleeping:
-                # Draw Z's
-                for i in range(3):
-                    pyglet.text.Label(
-                        "Z",
-                        font_name='Arial',
-                        font_size=icon_size,
-                        bold=True,
-                        x=start_x + (i * icon_size//2),
-                        y=icon_y + (i * icon_size//2),
-                        anchor_x='center',
-                        anchor_y='center',
-                        color=(200, 200, 255, 255)
-                    ).draw()
-
-            if selected_creature.eating:
-                # Draw fork icon
-                fork_height = icon_size
-                fork_width = icon_size // 3
-                
-                rotated_rect = pyglet.shapes.Rectangle(
-                    start_x + icon_spacing - fork_width//2,
-                    icon_y - fork_height//2,
-                    fork_width,
-                    fork_height,
-                    color=(255, 200, 0, 255)
-                )
-                rotated_rect.draw()
-
-            if selected_creature.carrying_food:
-                # Draw package icon
-                package_size = icon_size
-                
-                # Package outline
-                pyglet.shapes.Rectangle(
-                    start_x + icon_spacing * 2 - package_size//2,
-                    icon_y - package_size//2,
-                    package_size,
-                    package_size,
-                    color=(200, 150, 50)
-                ).draw()
-
-                # Package cross lines
-                pyglet.shapes.Line(
-                    start_x + icon_spacing * 2 - package_size//2,
-                    icon_y,
-                    start_x + icon_spacing * 2 + package_size//2,
-                    icon_y,
-                    color=(150, 100, 0)
-                ).draw()
-                pyglet.shapes.Line(
-                    start_x + icon_spacing * 2,
-                    icon_y - package_size//2,
-                    start_x + icon_spacing * 2,
-                    icon_y + package_size//2,
-                    color=(150, 100, 0)
-                ).draw()
-
-            if selected_creature.target == "nursery":
-                # Draw egg icon
-                egg_size = icon_size // 2
-                pyglet.shapes.Circle(
-                    start_x + icon_spacing * 3,
-                    icon_y,
-                    egg_size,
-                    color=(255, 200, 0, 200)
-                ).draw()
-
-            if selected_creature.energy < 30:
-                # Draw battery icon
-                battery_width = icon_size
-                battery_height = icon_size // 2
-                
-                # Battery outline
-                pyglet.shapes.Rectangle(
-                    start_x + icon_spacing * 4 - battery_width//2,
-                    icon_y - battery_height//2,
-                    battery_width,
-                    battery_height,
-                    color=(100, 100, 100, 255)
-                ).draw()
-                
-                # Battery level
-                battery_level = max(1, int((selected_creature.energy / 30) * (battery_width - 4)))
-                pyglet.shapes.Rectangle(
-                    start_x + icon_spacing * 4 - battery_width//2 + 2,
-                    icon_y - battery_height//2 + 2,
-                    battery_level,
-                    battery_height - 4,
-                    color=(255, 0, 0, 255)
-                ).draw()
-
-            # Update and draw loading bars
-            age_percent = (selected_creature.age / selected_creature.max_age) * 100
-            stats_bars['age'].update_value(age_percent, f"({selected_creature.age})")
-            stats_bars['health'].update_value(selected_creature.health)
-            stats_bars['energy'].update_value(selected_creature.energy)
-            stats_bars['hunger'].update_value(selected_creature.hunger)
-            stats_bars['happiness'].update_value(selected_creature.happiness)
-            
-            for bar in stats_bars.values():
-                bar.draw()
 
 # Initial UI position update
 update_ui_positions()
