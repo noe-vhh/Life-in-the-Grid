@@ -299,16 +299,50 @@ class Creature:
         self.chew_timer = 0
         
     def calculate_happiness(self):
-        """Calculate creature happiness based on various factors"""
-        happiness = 100
+        """Calculate creature happiness based on various factors with weighted importance"""
+        base_happiness = 100
         
-        if self.hunger < 50:
-            happiness -= (50 - self.hunger)
-        if self.energy < 50:
-            happiness -= (50 - self.energy)
-        if self.health < 50:
-            happiness -= (50 - self.health)
+        # Health factor (30% weight)
+        health_factor = self.health / 100
+        health_impact = 30 * health_factor
         
+        # Hunger factor (25% weight)
+        # More nuanced hunger impact - starts affecting happiness earlier
+        hunger_factor = self.hunger / 100
+        hunger_impact = 25 * hunger_factor
+        
+        # Energy factor (20% weight)
+        # More nuanced energy impact - gradual decrease
+        energy_factor = self.energy / 100
+        energy_impact = 20 * energy_factor
+        
+        # Age factor (10% weight)
+        # Happiness slightly decreases with age, but not too dramatically
+        age_factor = max(0, 1 - (self.age / self.max_age) * 0.5)  # Only 50% decrease at max age
+        age_impact = 10 * age_factor
+        
+        # Social factor (15% weight)
+        # Count nearby creatures for social happiness
+        nearby_creatures = len([c for c in self.env.get_nearby_entities(self.x, self.y, 2)
+                              if isinstance(c, Creature) and not c.dead])
+        social_factor = min(1.0, nearby_creatures / 3)  # Max happiness with 3 nearby creatures
+        social_impact = 15 * social_factor
+        
+        # Calculate total happiness
+        happiness = (health_impact + hunger_impact + energy_impact + 
+                    age_impact + social_impact)
+        
+        # Additional modifiers
+        if self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping"):
+            happiness += 10  # Bonus for sleeping in proper area
+        if self.has_laid_egg:
+            happiness += 15  # Bonus for recent reproduction
+        if self.carrying_food:
+            happiness -= 5   # Slight decrease while working
+        if self.age_related_health_loss:
+            happiness -= 10  # Penalty for age-related health issues
+        
+        # Ensure happiness stays within bounds
         return max(0, min(100, happiness))
 
     def move(self, max_x, max_y):
@@ -433,8 +467,8 @@ class Creature:
                 self.die()
                 return
 
-        # Check for critical hunger - override sleep state
-        if self.hunger <= 20:
+        # Modified hunger behavior - look for food more proactively
+        if self.hunger <= 30:  # Changed from 20 to 30
             self.sleeping = False
             self.target = "food"
             self.move(self.env.width, self.env.height)
