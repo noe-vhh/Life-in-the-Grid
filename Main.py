@@ -79,6 +79,14 @@ DEAD_BREATH_AMOUNT = 0.08  # Increased from 0.04 to 0.08 (8% of size)
 # Near the top with other constants
 HEART_ANIMATION_SPEED = 2.0  # Adjust this value to control animation speed
 
+# Add these constants near other appearance-related constants
+MOUTH_WIDTH = 8  # Width of the mouth
+MOUTH_HEIGHT = 4  # Height of the mouth when open
+MOUTH_Y_OFFSET = -8  # Lowered vertical position relative to center
+MOUTH_OPEN_SPEED = 0.1  # Speed of mouth opening/closing animation
+MAX_MOUTH_OPEN = 6  # Maximum height when eating
+SMILE_CURVE = 3  # Amount of curve for smiles/frowns
+
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -284,6 +292,12 @@ class Creature:
         # Add heart animation property
         self.heart_animation_offset = random.uniform(0, 2 * math.pi)  # Add random starting phase
         
+        # Add mouth animation properties
+        self.mouth_open_amount = 0
+        self.target_mouth_open = 0
+        self.is_chewing = False
+        self.chew_timer = 0
+        
     def calculate_happiness(self):
         """Calculate creature happiness based on various factors"""
         happiness = 100
@@ -377,6 +391,8 @@ class Creature:
             return
 
         # Add this near the start of update
+        self.update_mouth()
+        
         if FPS > 0:  # Only update animation if game is not paused
             self.animation_timer += 1/60  # Increment by a fixed time step
 
@@ -1132,6 +1148,88 @@ Position: ({self.x}, {self.y})"""
                 )
             ])
 
+        # Add this after drawing the main body but before status icons
+        if not self.dead:
+            # Calculate mouth position
+            mouth_x = center_x
+            mouth_y = center_y + MOUTH_Y_OFFSET
+            
+            if self.eating:
+                # Open mouth for eating
+                shapes.append(pyglet.shapes.Rectangle(
+                    mouth_x - MOUTH_WIDTH//2,
+                    mouth_y - self.mouth_open_amount//2,
+                    MOUTH_WIDTH,
+                    self.mouth_open_amount,
+                    color=(0, 0, 0),
+                    batch=batch
+                ))
+                
+                # Mouth outline
+                shapes.append(pyglet.shapes.BorderedRectangle(
+                    mouth_x - MOUTH_WIDTH//2,
+                    mouth_y - self.mouth_open_amount//2,
+                    MOUTH_WIDTH,
+                    self.mouth_open_amount,
+                    border=1,
+                    color=(0, 0, 0),
+                    border_color=(50, 50, 50),
+                    batch=batch
+                ))
+            else:
+                # Different mouth expressions based on state
+                points = []
+                
+                if self.health < 30 or self.hunger < 30 or self.energy < 30:
+                    # Worried/concerned expression (inverted curve)
+                    points = [
+                        (mouth_x - MOUTH_WIDTH//2, mouth_y),
+                        (mouth_x, mouth_y + SMILE_CURVE),
+                        (mouth_x + MOUTH_WIDTH//2, mouth_y)
+                    ]
+                elif self.happiness > 80:
+                    # Happy smile (curved down)
+                    points = [
+                        (mouth_x - MOUTH_WIDTH//2, mouth_y),
+                        (mouth_x, mouth_y - SMILE_CURVE),
+                        (mouth_x + MOUTH_WIDTH//2, mouth_y)
+                    ]
+                else:
+                    # Neutral expression (straight line)
+                    points = [
+                        (mouth_x - MOUTH_WIDTH//2, mouth_y),
+                        (mouth_x, mouth_y),
+                        (mouth_x + MOUTH_WIDTH//2, mouth_y)
+                    ]
+                
+                # Draw the mouth curve
+                shapes.append(pyglet.shapes.Line(
+                    points[0][0], points[0][1],
+                    points[1][0], points[1][1],
+                    color=(0, 0, 0),
+                    batch=batch,
+                    width=2
+                ))
+                shapes.append(pyglet.shapes.Line(
+                    points[1][0], points[1][1],
+                    points[2][0], points[2][1],
+                    color=(0, 0, 0),
+                    batch=batch,
+                    width=2
+                ))
+        else:
+            # Straight line for dead creatures
+            mouth_x = center_x
+            mouth_y = center_y + MOUTH_Y_OFFSET
+            
+            shapes.append(pyglet.shapes.Line(
+                mouth_x - MOUTH_WIDTH//2, mouth_y,
+                mouth_x + MOUTH_WIDTH//2, mouth_y,
+                color=(50, 0, 0),
+                batch=batch,
+                width=2
+            ))
+
         return shapes
 
     def update_eyes(self):
@@ -1145,6 +1243,32 @@ Position: ({self.x}, {self.y})"""
                 else:
                     self.is_blinking = False
                     self.blink_timer = BLINK_INTERVAL + random.randint(-2, 2)  # Add some randomness
+
+    def update_mouth(self):
+        """Update mouth animation state"""
+        if self.dead:
+            # Dead creatures have a static slightly open mouth
+            self.mouth_open_amount = 2
+            return
+        
+        if self.eating:
+            # Chewing animation
+            self.is_chewing = True
+            self.chew_timer += MOUTH_OPEN_SPEED
+            self.target_mouth_open = (math.sin(self.chew_timer * 4) * 0.5 + 0.5) * MAX_MOUTH_OPEN
+        elif self.sleeping:
+            # Slightly open mouth when sleeping (breathing)
+            self.target_mouth_open = 2 + math.sin(self.animation_timer) * 1
+        else:
+            # Normal state - occasional mouth movements
+            if random.random() < 0.01:  # Random chance to open/close mouth
+                self.target_mouth_open = random.uniform(0, 3)
+        
+        # Smoothly animate towards target
+        if self.mouth_open_amount < self.target_mouth_open:
+            self.mouth_open_amount = min(self.mouth_open_amount + MOUTH_OPEN_SPEED, self.target_mouth_open)
+        elif self.mouth_open_amount > self.target_mouth_open:
+            self.mouth_open_amount = max(self.mouth_open_amount - MOUTH_OPEN_SPEED, self.target_mouth_open)
 
 # The environment where creatures live
 class Environment:
