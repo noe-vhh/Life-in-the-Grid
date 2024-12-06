@@ -713,13 +713,14 @@ Position: ({self.x}, {self.y})"""
                 batch=batch
             ))
             
-            # Food value indicator (arc)
+            # Food value indicator (arc) with updated color scheme
             if self.food_value > 0:
                 food_percentage = self.food_value / 200
+                # Use a more muted green for the food indicator
                 shapes.append(pyglet.shapes.Arc(
                     center_x, center_y,
                     current_radius * 0.8,  # Apply breathing to food indicator
-                    color=(0, 255, 0),
+                    color=(120, 150, 0),  # Muted green-brown color
                     batch=batch,
                     angle=food_percentage * 6.28319  # 2*pi for full circle
                 ))
@@ -1032,57 +1033,104 @@ Position: ({self.x}, {self.y})"""
                         )
     
         # Draw antennae
-        # Remove the condition that checks if the creature is dead
         # Only living creatures have antennae
-        # Calculate base positions for antennae
-        antenna_base_y = center_y + base_radius - 2  # Slightly below top of head
-        left_base_x = center_x - ANTENNA_SPACING // 2
-        right_base_x = center_x + ANTENNA_SPACING // 2
+        if not self.dead:
+            # Calculate base positions for antennae
+            antenna_base_y = center_y + base_radius - 2  # Slightly below top of head
+            left_base_x = center_x - ANTENNA_SPACING // 2
+            right_base_x = center_x + ANTENNA_SPACING // 2
 
-        # Calculate wave effect
-        wave = math.sin(self.animation_timer * ANTENNA_WAVE_SPEED) * ANTENNA_WAVE_AMOUNT
-        # Add extra wave when moving or targeting
-        if self.target or self.carrying_food:
-            wave *= 1.5  # More movement when active
+            # Calculate wave effect
+            wave = math.sin(self.animation_timer * ANTENNA_WAVE_SPEED) * ANTENNA_WAVE_AMOUNT
+            # Add extra wave when moving or targeting
+            if self.target or self.carrying_food:
+                wave *= 1.5  # More movement when active
 
-        # Draw left antenna
-        left_tip_x = left_base_x - math.sin(wave) * ANTENNA_LENGTH
-        left_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
-        shapes.append(pyglet.shapes.Line(
-            left_base_x, antenna_base_y,
-            left_tip_x, left_tip_y,
-            width=ANTENNA_WIDTH,
-            color=self.color if not isinstance(self.color, str) else (0, 255, 0),
-            batch=batch
-        ))
-
-        # Draw right antenna
-        right_tip_x = right_base_x + math.sin(wave) * ANTENNA_LENGTH
-        right_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
-        shapes.append(pyglet.shapes.Line(
-            right_base_x, antenna_base_y,
-            right_tip_x, right_tip_y,
-            width=ANTENNA_WIDTH,
-            color=self.color if not isinstance(self.color, str) else (0, 255, 0),
-            batch=batch
-        ))
-
-        # Draw small dots at antenna tips
-        tip_size = ANTENNA_WIDTH // 2
-        shapes.extend([
-            pyglet.shapes.Circle(
+            # Draw left antenna
+            left_tip_x = left_base_x - math.sin(wave) * ANTENNA_LENGTH
+            left_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
+            shapes.append(pyglet.shapes.Line(
+                left_base_x, antenna_base_y,
                 left_tip_x, left_tip_y,
-                tip_size,
+                width=ANTENNA_WIDTH,
                 color=self.color if not isinstance(self.color, str) else (0, 255, 0),
                 batch=batch
-            ),
-            pyglet.shapes.Circle(
+            ))
+
+            # Draw right antenna
+            right_tip_x = right_base_x + math.sin(wave) * ANTENNA_LENGTH
+            right_tip_y = antenna_base_y + math.cos(wave) * ANTENNA_LENGTH
+            shapes.append(pyglet.shapes.Line(
+                right_base_x, antenna_base_y,
                 right_tip_x, right_tip_y,
-                tip_size,
+                width=ANTENNA_WIDTH,
                 color=self.color if not isinstance(self.color, str) else (0, 255, 0),
                 batch=batch
-            )
-        ])
+            ))
+
+            # Draw small dots at antenna tips
+            tip_size = ANTENNA_WIDTH // 2
+            shapes.extend([
+                pyglet.shapes.Circle(
+                    left_tip_x, left_tip_y,
+                    tip_size,
+                    color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+                    batch=batch
+                ),
+                pyglet.shapes.Circle(
+                    right_tip_x, right_tip_y,
+                    tip_size,
+                    color=self.color if not isinstance(self.color, str) else (0, 255, 0),
+                    batch=batch
+                )
+            ])
+        else:
+            # Dead creature antennae (drooping and darker color)
+            antenna_base_y = center_y + base_radius - 2
+            left_base_x = center_x - ANTENNA_SPACING // 2
+            right_base_x = center_x + ANTENNA_SPACING // 2
+
+            # Calculate drooping effect for dead antennae
+            droop_angle = -math.pi / 4  # 45 degrees downward
+
+            # Draw left antenna (drooping)
+            left_tip_x = left_base_x - math.cos(droop_angle) * ANTENNA_LENGTH
+            left_tip_y = antenna_base_y - math.sin(droop_angle) * ANTENNA_LENGTH
+            shapes.append(pyglet.shapes.Line(
+                left_base_x, antenna_base_y,
+                left_tip_x, left_tip_y,
+                width=ANTENNA_WIDTH,
+                color=(80, 0, 0),  # Darker red for dead creature
+                batch=batch
+            ))
+
+            # Draw right antenna (drooping)
+            right_tip_x = right_base_x + math.cos(droop_angle) * ANTENNA_LENGTH
+            right_tip_y = antenna_base_y - math.sin(droop_angle) * ANTENNA_LENGTH
+            shapes.append(pyglet.shapes.Line(
+                right_base_x, antenna_base_y,
+                right_tip_x, right_tip_y,
+                width=ANTENNA_WIDTH,
+                color=(80, 0, 0),  # Darker red for dead creature
+                batch=batch
+            ))
+
+            # Draw small dots at antenna tips (darker for dead)
+            tip_size = ANTENNA_WIDTH // 2
+            shapes.extend([
+                pyglet.shapes.Circle(
+                    left_tip_x, left_tip_y,
+                    tip_size,
+                    color=(80, 0, 0),  # Darker red for dead creature
+                    batch=batch
+                ),
+                pyglet.shapes.Circle(
+                    right_tip_x, right_tip_y,
+                    tip_size,
+                    color=(80, 0, 0),  # Darker red for dead creature
+                    batch=batch
+                )
+            ])
 
         return shapes
 
@@ -1912,7 +1960,7 @@ def on_draw():
             # Draw green arc to show remaining food
             pyglet.shapes.Arc(x_pos, y_offset, 
                             LEGEND_ICON_SIZE//2 * 0.8,  # Slightly smaller radius
-                            color=(0, 255, 0),
+                            color=(120, 150, 0),  # Muted green-brown color
                             start_angle=0,  # Start from right
                             angle=4.71239,  # About 3/4 of a circle
                             batch=None).draw()
