@@ -1,5 +1,7 @@
 ## Essential UI
 
+- [ ] Uniqueness of creatures
+
 - [ ] Info panel update and improvements
 - [ ] Bars to display hunger, energy, health
 - [ ] General UI improvements
@@ -8,19 +10,6 @@
 - [ ] Improve background
 - [ ] Improve zone visuals
 - [ ] make grid more apealing
-
-## Technical Foundation
-- [ ] Split into multiple files
-  - Creatures
-  - UI
-  - Environment
-- [ ] Config file for constants
-- [ ] Basic optimization
-- [ ] Simple save system
-
-## Documentation
-- [ ] GitHub readme
-- [ ] System documentation
 
 # Mid-Term Goals
 
@@ -33,6 +22,15 @@
 - [ ] Basic terrain types
 - [ ] Simple day/night cycle
 - [ ] Basic plant growth
+
+## Technical Foundation
+- [ ] Split into multiple files
+  - Creatures
+  - UI
+  - Environment
+- [ ] Config file for constants
+- [ ] Basic optimization
+- [ ] Simple save system
 
 # Long-Term Enhancements
 
@@ -75,6 +73,10 @@
 - [ ] Complex role specialization
 - [ ] Advanced territory management
 - [ ] Inter-colony interactions
+
+## Documentation
+- [ ] GitHub readme
+- [ ] System documentation
 
 # Concept Documentation
 
