@@ -87,6 +87,23 @@ MOUTH_OPEN_SPEED = 0.1  # Speed of mouth opening/closing animation
 MAX_MOUTH_OPEN = 6  # Maximum height when eating
 SMILE_CURVE = 3  # Amount of curve for smiles/frowns
 
+# Add these constants near other appearance-related constants
+TEXTURE_PATTERNS = {
+    "dots": {"chance": 0.25, "density": 8},
+    "stripes": {"chance": 0.25, "density": 4},
+    "spots": {"chance": 0.25, "density": 5},
+    "plain": {"chance": 0.25}  # Default pattern
+}
+
+PATTERN_COLORS = [
+    (255, 255, 255),  # White
+    (50, 50, 50),     # Dark Gray
+    (200, 200, 200),  # Light Gray
+    (255, 223, 186),  # Peach
+    (255, 218, 233),  # Pink
+    (230, 230, 255)   # Light Blue
+]
+
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -298,6 +315,15 @@ class Creature:
         self.is_chewing = False
         self.chew_timer = 0
         
+        # Add texture-related attributes
+        self.pattern = random.choices(
+            list(TEXTURE_PATTERNS.keys()),
+            weights=[p["chance"] for p in TEXTURE_PATTERNS.values()]
+        )[0]
+        self.pattern_color = random.choice(PATTERN_COLORS)
+        self.pattern_offset = random.uniform(0, 2 * math.pi)  # Random starting offset
+        self.pattern_scale = random.uniform(0.8, 1.2)  # Random scale variation
+
     def calculate_happiness(self):
         """Calculate creature happiness based on various factors with weighted importance"""
         base_happiness = 100
@@ -805,6 +831,11 @@ Position: ({self.x}, {self.y})"""
                     batch=batch
                 ))
 
+        # Add texture pattern after drawing main body but before other features
+        if not self.dead and self.pattern != "plain":
+            pattern_shapes = self.draw_pattern(center_x, center_y, current_radius, batch)
+            shapes.extend(pattern_shapes)
+
         # Add status icons animation
         if not self.dead:
             # Only update animation if game is not paused (FPS > 0)
@@ -1304,6 +1335,59 @@ Position: ({self.x}, {self.y})"""
         elif self.mouth_open_amount > self.target_mouth_open:
             self.mouth_open_amount = max(self.mouth_open_amount - MOUTH_OPEN_SPEED, self.target_mouth_open)
 
+    def draw_pattern(self, center_x, center_y, radius, batch):
+        """Draw the creature's texture pattern"""
+        shapes = []
+        pattern_info = TEXTURE_PATTERNS[self.pattern]
+        
+        if self.pattern == "dots":
+            density = pattern_info["density"]
+            dot_size = radius * 0.15 * self.pattern_scale
+            for i in range(density):
+                angle = (i / density * 2 * math.pi + self.pattern_offset) % (2 * math.pi)
+                dist = radius * 0.6  # Keep dots within 60% of radius
+                x = center_x + math.cos(angle) * dist
+                y = center_y + math.sin(angle) * dist
+                shapes.append(pyglet.shapes.Circle(
+                    x, y, dot_size,
+                    color=self.pattern_color,
+                    batch=batch
+                ))
+
+        elif self.pattern == "stripes":
+            density = pattern_info["density"]
+            stripe_width = radius * 0.15 * self.pattern_scale
+            for i in range(density):
+                angle = (i / density * math.pi + self.pattern_offset) % math.pi
+                shapes.append(pyglet.shapes.Line(
+                    center_x - radius * math.cos(angle),
+                    center_y - radius * math.sin(angle),
+                    center_x + radius * math.cos(angle),
+                    center_y + radius * math.sin(angle),
+                    width=stripe_width,
+                    color=self.pattern_color,
+                    batch=batch
+                ))
+
+        elif self.pattern == "spots":
+            density = pattern_info["density"]
+            spot_size = radius * 0.25 * self.pattern_scale
+            for i in range(density):
+                angle = (i / density * 2 * math.pi + self.pattern_offset) % (2 * math.pi)
+                dist = radius * random.uniform(0.2, 0.7)  # Random distance from center
+                spot_x = center_x + math.cos(angle) * dist
+                spot_y = center_y + math.sin(angle) * dist
+                
+                # Create a simpler circular spot instead of polygon
+                shapes.append(pyglet.shapes.Circle(
+                    spot_x, spot_y,
+                    spot_size * random.uniform(0.8, 1.2),  # Random size variation
+                    color=self.pattern_color,
+                    batch=batch
+                ))
+
+        return shapes
+
 # The environment where creatures live
 class Environment:
     def __init__(self, width, height):
@@ -1440,7 +1524,7 @@ class Environment:
             
             # Calculate label position, ensuring it stays within window bounds
             label_x = min(max(center[0], 100), WIDTH - SIDEBAR_WIDTH - 100)
-            label_y = min(max(center[1] - radius - 25, 30), HEIGHT - 30)
+            label_y = min(max(center[1] - radius - 25, HEIGHT - 30), HEIGHT - 30)  # Fixed missing parenthesis
             
             # Draw label with semi-transparent background
             label_width = len(label) * 8
