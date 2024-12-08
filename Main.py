@@ -832,7 +832,7 @@ Position: ({self.x}, {self.y})"""
                 ))
 
         # Add texture pattern after drawing main body but before other features
-        if not self.dead and self.pattern != "plain":
+        if self.pattern != "plain":
             pattern_shapes = self.draw_pattern(center_x, center_y, current_radius, batch)
             shapes.extend(pattern_shapes)
 
