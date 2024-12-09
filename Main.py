@@ -104,6 +104,17 @@ PATTERN_COLORS = [
     (230, 230, 255)   # Light Blue
 ]
 
+# Add these constants near other UI constants
+STAT_BAR_HEIGHT = 15
+STAT_BAR_PADDING = 5
+STAT_BAR_COLORS = {
+    'health': (255, 50, 50),    # Red
+    'energy': (50, 150, 255),   # Blue
+    'hunger': (255, 200, 50),   # Yellow
+    'happiness': (255, 100, 255),# Pink
+    'age': (100, 255, 100)      # Green
+}
+
 # Create a simple rectangle class for panel sections
 class Panel:
     def __init__(self, x, y, width, height, title=""):
@@ -202,8 +213,7 @@ stats_panel = Panel(
     WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
     HEIGHT - TOP_MARGIN - CONTROL_PANEL_HEIGHT - PANEL_SPACING - STATS_PANEL_HEIGHT,
     SIDEBAR_WIDTH,
-    STATS_PANEL_HEIGHT,
-    "Stats"
+    STATS_PANEL_HEIGHT
 )
 
 legend_panel = Panel(
@@ -213,19 +223,6 @@ legend_panel = Panel(
     SIDEBAR_WIDTH,
     LEGEND_PANEL_HEIGHT,
     "Legend"
-)
-
-# Create stats label
-stats_label = pyglet.text.Label(
-    "No creature selected",
-    font_name='Arial',
-    font_size=10,
-    x=WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15,
-    y=stats_panel.y + stats_panel.height - 40,
-    width=SIDEBAR_WIDTH - 30,
-    multiline=True,
-    anchor_x='left',
-    anchor_y='top'
 )
 
 # THEN create the button sprites with pause initially clicked
@@ -2082,13 +2079,241 @@ def format_stats(creature):
     return str(creature)  # Use the creature's string representation
 
 def update_stats():
-    """Update the stats with formatted text"""
+    """Update the stats display with loading bars"""
+    global selected_creature, selected_egg
+    
     if selected_creature:
-        stats_label.text = format_stats(selected_creature)
+        # Calculate base positions using panel dimensions
+        panel_center_x = stats_panel.x + (stats_panel.width / 2)  # Center of the panel
+        base_x = panel_center_x - (SIDEBAR_WIDTH - 30) / 2  # Center the content
+        base_y = stats_panel.y + stats_panel.height - 40
+        bar_width = SIDEBAR_WIDTH - 30
+        
+        # Draw title (centered)
+        pyglet.text.Label(
+            "Creature Stats",
+            font_name='Arial',
+            font_size=12,
+            bold=True,
+            x=panel_center_x,
+            y=base_y + 20,
+            anchor_x='center',
+            anchor_y='center'
+        ).draw()
+        
+        if not selected_creature.dead:
+            # Health bar
+            draw_stat_bar(
+                base_x, base_y - STAT_BAR_HEIGHT - STAT_BAR_PADDING,
+                bar_width, selected_creature.health, 100,
+                STAT_BAR_COLORS['health'], "Health", None
+            )
+            
+            # Energy bar
+            draw_stat_bar(
+                base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 2,
+                bar_width, selected_creature.energy, 100,
+                STAT_BAR_COLORS['energy'], "Energy", None
+            )
+            
+            # Hunger bar
+            draw_stat_bar(
+                base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 3,
+                bar_width, selected_creature.hunger, 100,
+                STAT_BAR_COLORS['hunger'], "Hunger", None
+            )
+            
+            # Happiness bar
+            draw_stat_bar(
+                base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 4,
+                bar_width, selected_creature.happiness, 100,
+                STAT_BAR_COLORS['happiness'], "Happiness", None
+            )
+            
+            # Age bar
+            age_percentage = (selected_creature.age / selected_creature.max_age) * 100
+            draw_stat_bar(
+                base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 5,
+                bar_width, age_percentage, 100,
+                STAT_BAR_COLORS['age'], "Age", None,
+                age_value=selected_creature.age  # Pass the actual age value
+            )
+            
+            # Additional status text (centered)
+            status_text = []
+            if selected_creature.sleeping:
+                status_text.append("Sleeping")
+            if selected_creature.eating:
+                status_text.append("Eating")
+            if selected_creature.has_laid_egg:
+                status_text.append("Has unhatched egg")
+            if selected_creature.age > selected_creature.max_age * 0.7:
+                status_text.append("Elderly")
+            
+            if status_text:
+                pyglet.text.Label(
+                    "Status: " + ", ".join(status_text),
+                    font_name='Arial',
+                    font_size=10,
+                    x=panel_center_x,
+                    y=base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 6,
+                    anchor_x='center',
+                    anchor_y='center',
+                    width=bar_width,
+                    multiline=True
+                ).draw()
+        else:
+            # Dead creature stats (centered)
+            pyglet.text.Label(
+                "DEAD CREATURE",
+                font_name='Arial',
+                font_size=12,
+                bold=True,
+                x=panel_center_x,
+                y=base_y,
+                anchor_x='center',
+                anchor_y='top',
+                color=(255, 100, 100, 255)
+            ).draw()
+            
+            # Draw cause of death (centered)
+            pyglet.text.Label(
+                f"Cause: {selected_creature.death_cause}",
+                font_name='Arial',
+                font_size=10,
+                x=panel_center_x,
+                y=base_y - 25,
+                anchor_x='center',
+                anchor_y='top',
+                color=(255, 255, 255, 255)
+            ).draw()
+            
+            # Draw food bar (centered)
+            draw_stat_bar(
+                base_x,
+                base_y - 65,
+                bar_width,
+                selected_creature.food_value/2,
+                100,
+                (150, 200, 50),
+                "Food",
+                None
+            )
+    
     elif selected_egg:
-        stats_label.text = f"Selected Egg:\nIncubation: {int((selected_egg.timer/300) * 100)}%\nPosition: ({selected_egg.x}, {selected_egg.y})"
-    else:
-        stats_label.text = "No creature or egg selected"
+        panel_center_x = stats_panel.x + (stats_panel.width / 2)  # Center of the panel
+        base_x = panel_center_x - (SIDEBAR_WIDTH - 30) / 2  # Center the content
+        base_y = stats_panel.y + stats_panel.height - 40
+        bar_width = SIDEBAR_WIDTH - 30
+        
+        # Title (centered)
+        pyglet.text.Label(
+            "Egg Status",
+            font_name='Arial',
+            font_size=12,
+            bold=True,
+            x=panel_center_x,
+            y=base_y + 20,
+            anchor_x='center',
+            anchor_y='center'
+        ).draw()
+        
+        # Progress bar
+        progress = (selected_egg.timer / selected_egg.hatch_time) * 100
+        draw_stat_bar(
+            base_x, base_y - STAT_BAR_HEIGHT - STAT_BAR_PADDING,
+            bar_width, progress, 100,
+            (255, 200, 0), "Progress", None
+        )
+
+def draw_stat_bar(x, y, width, value, max_value, color, label, batch, age_value=None):
+    """Draw a single stat bar with label and optional age value"""
+    # Draw label text
+    pyglet.text.Label(
+        label,
+        font_name='Arial',
+        font_size=10,
+        x=x,
+        y=y + STAT_BAR_HEIGHT//2,
+        anchor_x='left',
+        anchor_y='center',
+        color=(255, 255, 255, 255)
+    ).draw()
+    
+    # Calculate bar dimensions
+    bar_x = x + 70  # Offset for label
+    bar_width = width - 80  # Adjust width to account for label
+    
+    # Draw background (dark gray)
+    pyglet.shapes.Rectangle(
+        bar_x, y,
+        bar_width,
+        STAT_BAR_HEIGHT,
+        color=(50, 50, 50)
+    ).draw()
+    
+    # Draw border
+    border_color = (100, 100, 100)  # Light gray border
+    border_thickness = 2
+    
+    # Top border
+    pyglet.shapes.Line(
+        bar_x, y + STAT_BAR_HEIGHT,
+        bar_x + bar_width, y + STAT_BAR_HEIGHT,
+        border_thickness,
+        border_color
+    ).draw()
+    
+    # Bottom border
+    pyglet.shapes.Line(
+        bar_x, y,
+        bar_x + bar_width, y,
+        border_thickness,
+        border_color
+    ).draw()
+    
+    # Left border
+    pyglet.shapes.Line(
+        bar_x, y,
+        bar_x, y + STAT_BAR_HEIGHT,
+        border_thickness,
+        border_color
+    ).draw()
+    
+    # Right border
+    pyglet.shapes.Line(
+        bar_x + bar_width, y,
+        bar_x + bar_width, y + STAT_BAR_HEIGHT,
+        border_thickness,
+        border_color
+    ).draw()
+    
+    # Draw progress bar
+    progress_width = bar_width * (value / max_value)
+    if progress_width > 0:
+        pyglet.shapes.Rectangle(
+            bar_x,
+            y,
+            progress_width,
+            STAT_BAR_HEIGHT,
+            color=color
+        ).draw()
+    
+    # Draw value percentage (centered in the bar)
+    percentage_text = f"{int(value)}%"
+    if label == "Age" and age_value is not None:
+        percentage_text = f"{int(value)}% ({int(age_value)} days)"
+        
+    pyglet.text.Label(
+        percentage_text,
+        font_name='Arial',
+        font_size=9,
+        x=bar_x + (bar_width / 2),
+        y=y + STAT_BAR_HEIGHT//2,
+        anchor_x='center',
+        anchor_y='center',
+        color=(255, 255, 255, 255)
+    ).draw()
 
 # Create the environment with only one creature
 env = Environment((WIDTH - SIDEBAR_WIDTH) // GRID_SIZE, HEIGHT // GRID_SIZE)
@@ -2148,10 +2373,6 @@ def update_ui_positions():
     
     fast_forward_button.x = WIDTH - SIDEBAR_WIDTH + 135
     fast_forward_button.y = control_panel.y + control_panel.height - 75
-    
-    # Update stats label with more space from top of panel
-    stats_label.x = WIDTH - SIDEBAR_WIDTH - TOP_MARGIN + 15
-    stats_label.y = stats_panel.y + stats_panel.height - 40
 
 @window.event
 def on_draw():
@@ -2267,10 +2488,12 @@ def on_draw():
         y_offset -= LEGEND_ITEM_SPACING
     
     env.draw(window)
-    stats_label.draw()
     pause_button.draw()
     play_button.draw()
     fast_forward_button.draw()
+    
+    # Draw stats
+    update_stats()
 
 # Initial UI position update
 update_ui_positions()
@@ -2282,7 +2505,7 @@ def update(dt):
 
 # Make sure to schedule the initial update
 if FPS > 0:
-    pyglet.clock.schedule_interval(update, 1.0 / FPS)  # Add this line before pyglet.app.run()
+    pyglet.clock.schedule_interval(update, 1.0 / FPS)
 
 # Run the pyglet application
 pyglet.app.run()
