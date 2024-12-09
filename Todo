@@ -1,9 +1,3 @@
-## Essential UI
-
-- [ ] Improve background
-- [ ] Improve zone visuals
-- [ ] make grid more apealing
-
 ## Technical Foundation
 - [ ] Split into multiple files
   - Creatures

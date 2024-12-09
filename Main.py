@@ -1,6 +1,7 @@
 import pyglet
 import random
 import math
+import time
 
 # Constants
 WIDTH = 1200
@@ -1499,49 +1500,184 @@ class Environment:
         batch = pyglet.graphics.Batch()
         shapes = []
         
-        # Draw colony areas first
+        # Draw grid lines first (so they appear behind everything else)
+        # Vertical lines
+        for x in range(0, self.width + 1):
+            x_pos = x * GRID_SIZE
+            shapes.append(pyglet.shapes.Line(
+                x_pos, 0,
+                x_pos, self.height * GRID_SIZE,
+                color=(50, 50, 50, 100),  # Dark grey with some transparency
+                width=1,
+                batch=batch
+            ))
+        
+        # Horizontal lines
+        for y in range(0, self.height + 1):
+            y_pos = y * GRID_SIZE
+            shapes.append(pyglet.shapes.Line(
+                0, y_pos,
+                self.width * GRID_SIZE, y_pos,
+                color=(50, 50, 50, 100),  # Dark grey with some transparency
+                width=1,
+                batch=batch
+            ))
+        
+        # Draw thicker lines every 5 cells for better readability
+        for x in range(0, self.width + 1, 5):
+            x_pos = x * GRID_SIZE
+            shapes.append(pyglet.shapes.Line(
+                x_pos, 0,
+                x_pos, self.height * GRID_SIZE,
+                color=(70, 70, 70, 150),  # Slightly darker and more opaque
+                width=2,
+                batch=batch
+            ))
+        
+        for y in range(0, self.height + 1, 5):
+            y_pos = y * GRID_SIZE
+            shapes.append(pyglet.shapes.Line(
+                0, y_pos,
+                self.width * GRID_SIZE, y_pos,
+                color=(70, 70, 70, 150),  # Slightly darker and more opaque
+                width=2,
+                batch=batch
+            ))
+        
+        # Draw colony areas first with improved visuals
         areas = [
-            ("food", FOOD_STORAGE_RADIUS * self.food_area_scale, (100, 50, 50), "Food Zone"),
-            ("nursery", NURSERY_RADIUS * self.nursery_area_scale, (50, 100, 50), "Nursery Zone"),
-            ("sleeping", SLEEPING_RADIUS * self.sleeping_area_scale, (50, 50, 100), "Sleeping Zone")
+            ("food", FOOD_STORAGE_RADIUS * self.food_area_scale, (150, 80, 50), "Food Zone", 
+             [(200, 120, 70), (130, 60, 30)]),  # Gradient colors for food zone
+            ("nursery", NURSERY_RADIUS * self.nursery_area_scale, (70, 150, 70), "Nursery Zone",
+             [(90, 170, 90), (50, 130, 50)]),   # Gradient colors for nursery
+            ("sleeping", SLEEPING_RADIUS * self.sleeping_area_scale, (70, 70, 150), "Sleeping Zone",
+             [(90, 90, 170), (50, 50, 130)])    # Gradient colors for sleeping area
         ]
 
-        for area_type, radius, color, label in areas:
+        for area_type, radius, base_color, label, gradient_colors in areas:
             center = self.get_area_center(area_type)
             
-            # Explicitly unpack RGB values and set very low opacity
-            r, g, b = color
-            # Draw very transparent circle for the zone
-            zone_circle = pyglet.shapes.Circle(
-                center[0], center[1], radius,
-                color=(r, g, b, 20),  # Even more transparent (alpha=20)
+            # Draw multiple concentric circles with gradient effect
+            num_rings = 5
+            for i in range(num_rings):
+                ring_radius = radius * (1 - i/num_rings)
+                # Alternate between gradient colors
+                color = gradient_colors[i % 2]
+                
+                # Draw filled circle with very low opacity
+                shapes.append(pyglet.shapes.Circle(
+                    center[0], center[1], ring_radius,
+                    color=(*color, 15),  # Very transparent
+                    batch=batch
+                ))
+                
+                # Draw ring outline with slightly higher opacity
+                shapes.append(pyglet.shapes.Circle(
+                    center[0], center[1], ring_radius,
+                    color=(*color, 30),  # More visible outline
+                    batch=batch
+                ))
+
+            # Add subtle pattern effect (dots or lines based on area type)
+            if area_type == "food":
+                # Food area: scattered dots pattern
+                for _ in range(20):
+                    angle = random.random() * 2 * math.pi
+                    dist = random.random() * radius * 0.9
+                    dot_x = center[0] + math.cos(angle) * dist
+                    dot_y = center[1] + math.sin(angle) * dist
+                    shapes.append(pyglet.shapes.Circle(
+                        dot_x, dot_y, 3,
+                        color=(*gradient_colors[0], 40),
+                        batch=batch
+                    ))
+            
+            elif area_type == "nursery":
+                # Nursery area: nested hexagons pattern
+                for i in range(3):
+                    size = radius * (0.8 - i * 0.2)
+                    points = []
+                    for j in range(6):
+                        angle = j * math.pi / 3
+                        px = center[0] + math.cos(angle) * size
+                        py = center[1] + math.sin(angle) * size
+                        points.extend([px, py])
+                    
+                    shapes.append(pyglet.shapes.Line(
+                        points[0], points[1],
+                        points[2], points[3],
+                        color=(*gradient_colors[0], 40),
+                        batch=batch
+                    ))
+                    # ... add more lines to complete hexagon
+            
+            elif area_type == "sleeping":
+                # Sleeping area: curved lines pattern
+                num_curves = 8
+                for i in range(num_curves):
+                    angle = (i / num_curves) * 2 * math.pi
+                    start_x = center[0] + math.cos(angle) * radius * 0.3
+                    start_y = center[1] + math.sin(angle) * radius * 0.3
+                    end_x = center[0] + math.cos(angle) * radius * 0.8
+                    end_y = center[1] + math.sin(angle) * radius * 0.8
+                    shapes.append(pyglet.shapes.Line(
+                        start_x, start_y, end_x, end_y,
+                        color=(*gradient_colors[0], 40),
+                        batch=batch
+                    ))
+
+            # Add pulsing border effect
+            border_scale = 1 + math.sin(time.time() * 2) * 0.02  # Subtle pulse
+            shapes.append(pyglet.shapes.Circle(
+                center[0], center[1], radius * border_scale,
+                color=(*base_color, 50),  # Semi-transparent border
                 batch=batch
-            )
-            shapes.append(zone_circle)
+            ))
             
-            # Draw subtle border for the zone
-            border_circle = pyglet.shapes.Circle(
-                center[0], center[1], radius + 2,
-                color=(255, 255, 255, 30),
-                batch=batch
-            )
-            shapes.append(border_circle)
+            # Draw zone label with improved visibility
+            # Calculate label position based on area type
+            if area_type == "food":
+                label_x = center[0]
+                label_y = center[1] - radius - 25  # Below food zone
+            elif area_type == "nursery":
+                label_x = center[0]
+                label_y = center[1] + radius + 25  # Above nursery zone
+            elif area_type == "sleeping":
+                label_x = center[0]
+                label_y = center[1] - radius - 25  # Below sleeping zone
+
+            # Ensure labels stay within screen bounds
+            label_x = min(max(label_x, 100), WIDTH - SIDEBAR_WIDTH - 100)
+            label_y = min(max(label_y, 30), HEIGHT - 30)
+
+            # Draw label background with gradient
+            bg_width = len(label) * 8 + 20
+            bg_height = 30
+            for i in range(bg_height):
+                alpha = int(80 * (1 - i/bg_height))  # Gradient transparency
+                pyglet.shapes.Rectangle(
+                    label_x - bg_width/2,
+                    label_y - bg_height/2 + i,
+                    bg_width,
+                    1,
+                    color=(0, 0, 0, alpha)
+                ).draw()
             
-            # Calculate label position, ensuring it stays within window bounds
-            label_x = min(max(center[0], 100), WIDTH - SIDEBAR_WIDTH - 100)
-            label_y = min(max(center[1] - radius - 25, HEIGHT - 30), HEIGHT - 30)  # Fixed missing parenthesis
-            
-            # Draw label with semi-transparent background
-            label_width = len(label) * 8
-            pyglet.shapes.Rectangle(
-                label_x - label_width/2 - 5,
-                label_y - 10,
-                label_width + 10,
-                20,
-                color=(0, 0, 0, 100)
+            # Draw label text with shadow
+            # Shadow
+            pyglet.text.Label(
+                label,
+                font_name='Arial',
+                font_size=14,
+                bold=True,
+                x=label_x + 1,
+                y=label_y - 1,
+                anchor_x='center',
+                anchor_y='center',
+                color=(0, 0, 0, 200)
             ).draw()
             
-            # Draw the text
+            # Main text
             pyglet.text.Label(
                 label,
                 font_name='Arial',
@@ -1551,7 +1687,7 @@ class Environment:
                 y=label_y,
                 anchor_x='center',
                 anchor_y='center',
-                color=(255, 255, 255, 200)
+                color=(255, 255, 255, 230)
             ).draw()
 
         # Draw eggs
