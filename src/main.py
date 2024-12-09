@@ -3,115 +3,7 @@ import random
 import math
 import time
 
-# Constants
-WIDTH = 1200
-HEIGHT = 900
-GRID_SIZE = 50
-FPS = 0  # Initial FPS (paused)
-MIN_FPS = 1
-MAX_FPS = 60
-NEST_CENTER_X = WIDTH // 4  # Center of the nest area
-NEST_CENTER_Y = HEIGHT // 2
-FOOD_STORAGE_RADIUS = 5 * GRID_SIZE
-NURSERY_RADIUS = 3 * GRID_SIZE
-SLEEPING_RADIUS = 4 * GRID_SIZE
-CONTROL_PANEL_HEIGHT = 60
-STATS_PANEL_HEIGHT = 220
-LEGEND_PANEL_HEIGHT = 520
-
-# Update Constants with refined sizes and spacing
-SIDEBAR_WIDTH = 280        # Slightly wider for better text display
-TOP_MARGIN = 15           # Slightly larger margin
-PANEL_SPACING = 15        # Increased spacing between panels
-
-# Panel heights
-CONTROL_PANEL_HEIGHT = 60  # Reduced from 90 to 60 to fit buttons more snugly
-STATS_PANEL_HEIGHT = 220   # Keep stats panel height
-LEGEND_PANEL_HEIGHT = 440  # Keep legend panel height
-
-# Legend specific constants
-LEGEND_ITEM_SPACING = 24   # Space between legend items
-LEGEND_HEADER_SPACING = 30 # Space after headers
-LEGEND_GROUP_SPACING = 15  # Additional space between groups
-LEGEND_TEXT_SIZE = 10      # Text size
-LEGEND_HEADER_SIZE = 12    # Header text size
-LEGEND_ICON_SIZE = 16      # Icon size
-LEGEND_TOP_PADDING = 50    # Space from top of panel to first item
-
-# Constants for area positioning (add these near other constants)
-QUADRANT_OFFSET = 300  # Increased distance between centers to prevent overlap
-
-# Add these constants near the top with other constants
-ICON_ANIMATION_SPEED = 0.05  # Reduced from 0.5 to 0.2 (slower animation)
-ICON_OFFSET_Y = GRID_SIZE // 2  # Changed from GRID_SIZE to GRID_SIZE // 2
-ICON_SIZE = GRID_SIZE // 2  # Size of the icons
-
-# Add these constants near other egg-related constants
-EGG_PULSE_SPEED = 2.0  # Speed of the pulsing animation
-EGG_INNER_RATIO = 0.7  # Size of the inner egg shape
-EGG_SHINE_OFFSET = 0.3  # Offset for the shine effect
-
-# Add these constants near other animation constants
-BLINK_INTERVAL = 5  # Every ~5 frames at normal speed
-BLINK_DURATION = 1  # Blink for 1 frame
-EYE_SIZE = 3  # Size of the eyes
-EYE_SPACING = 6  # Distance between eyes
-EYE_OFFSET_Y = 2  # Vertical offset from center
-
-# Add these constants near other eye-related constants
-PUPIL_SIZE = 2  # Size of the pupil (smaller than eye)
-PUPIL_RANGE = 2  # How far the pupil can move from center
-
-# Add these constants near other creature appearance constants
-ANTENNA_LENGTH = 8  # Length of each antenna
-ANTENNA_WIDTH = 2   # Width/thickness of antennae
-ANTENNA_SPACING = 6  # Space between antenna bases
-ANTENNA_WAVE_SPEED = 0.25  # Speed of antenna movement
-ANTENNA_WAVE_AMOUNT = 0.5  # How much the antennae wave (in radians)
-
-# Add these constants near other animation constants
-BREATH_SPEED = 0.1  # Even slower breathing animation
-BREATH_AMOUNT = 0.05  # Increased from 0.08 to 0.15 (15% of size)
-DEAD_BREATH_AMOUNT = 0.08  # Increased from 0.04 to 0.08 (8% of size)
-
-# Near the top with other constants
-HEART_ANIMATION_SPEED = 2.0  # Adjust this value to control animation speed
-
-# Add these constants near other appearance-related constants
-MOUTH_WIDTH = 8  # Width of the mouth
-MOUTH_HEIGHT = 4  # Height of the mouth when open
-MOUTH_Y_OFFSET = -8  # Lowered vertical position relative to center
-MOUTH_OPEN_SPEED = 0.1  # Speed of mouth opening/closing animation
-MAX_MOUTH_OPEN = 6  # Maximum height when eating
-SMILE_CURVE = 3  # Amount of curve for smiles/frowns
-
-# Add these constants near other appearance-related constants
-TEXTURE_PATTERNS = {
-    "dots": {"chance": 0.25, "density": 8},
-    "stripes": {"chance": 0.25, "density": 4},
-    "spots": {"chance": 0.25, "density": 5},
-    "plain": {"chance": 0.25}  # Default pattern
-}
-
-PATTERN_COLORS = [
-    (255, 255, 255),  # White
-    (50, 50, 50),     # Dark Gray
-    (200, 200, 200),  # Light Gray
-    (255, 223, 186),  # Peach
-    (255, 218, 233),  # Pink
-    (230, 230, 255)   # Light Blue
-]
-
-# Add these constants near other UI constants
-STAT_BAR_HEIGHT = 15
-STAT_BAR_PADDING = 5
-STAT_BAR_COLORS = {
-    'health': (255, 50, 50),    # Red
-    'energy': (50, 150, 255),   # Blue
-    'hunger': (255, 200, 50),   # Yellow
-    'happiness': (255, 100, 255),# Pink
-    'age': (100, 255, 100)      # Green
-}
+from utils.constants import *
 
 # Create a simple rectangle class for panel sections
 class Panel:
@@ -145,52 +37,18 @@ class Panel:
                             anchor_x='left',
                             anchor_y='center').draw()
 
-# Create a simple slider class
-class Slider:
-    def __init__(self, x, y, width, min_value, max_value, initial_value):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = 10
-        self.min_value = min_value
-        self.max_value = max_value
-        self.value = initial_value
-        self.dragging = False
-        
-        # Calculate initial handle position
-        self.handle_x = self.x + (self.value - self.min_value) / (self.max_value - self.min_value) * self.width
-        self.handle_radius = 8
-        
-    def draw(self):
-        # Draw slider track
-        pyglet.shapes.Rectangle(self.x, self.y, self.width, self.height, 
-                              color=(100, 100, 100)).draw()
-        # Draw handle
-        pyglet.shapes.Circle(self.handle_x, self.y + self.height/2, 
-                           self.handle_radius, color=(200, 200, 200)).draw()
-        
-    def hit_test(self, x, y):
-        return (self.x <= x <= self.x + self.width and 
-                self.y - self.handle_radius <= y <= self.y + self.height + self.handle_radius)
-    
-    def update_value(self, x):
-        self.handle_x = min(max(x, self.x), self.x + self.width)
-        normalized_value = (self.handle_x - self.x) / self.width
-        self.value = round(self.min_value + normalized_value * (self.max_value - self.min_value))
-        return self.value
-
 # Create the window with resizable=False and fixed size
 window = pyglet.window.Window(WIDTH, HEIGHT, "Creature Simulation", resizable=False)
 
 # Load images for buttons
-pause_unclicked_image = pyglet.resource.image('Assets/UI Icons/pause-play-unclick.png')
-pause_clicked_image = pyglet.resource.image('Assets/UI Icons/pause-play-click.png')
+pause_unclicked_image = pyglet.resource.image('assets/ui icons/pause-play-unclick.png')
+pause_clicked_image = pyglet.resource.image('assets/ui icons/pause-play-click.png')
 
-play_unclicked_image = pyglet.resource.image('Assets/UI Icons/play-button-unclick.png')
-play_clicked_image = pyglet.resource.image('Assets/UI Icons/play-button-click.png')
+play_unclicked_image = pyglet.resource.image('assets/ui icons/play-button-unclick.png')
+play_clicked_image = pyglet.resource.image('assets/ui icons/play-button-click.png')
 
-fast_forward_unclicked_image = pyglet.resource.image('Assets/UI Icons/fast-forward-button-unclick.png')
-fast_forward_clicked_image = pyglet.resource.image('Assets/UI Icons/fast-forward-button-click.png')
+fast_forward_unclicked_image = pyglet.resource.image('assets/ui icons/fast-forward-button-unclick.png')
+fast_forward_clicked_image = pyglet.resource.image('assets/ui icons/fast-forward-button-click.png')
 
 # Set scale factor
 icon_scale = 0.075
@@ -252,18 +110,6 @@ fast_forward_button = pyglet.sprite.Sprite(
     y=vertical_center - (fast_forward_unclicked_image.height * icon_scale) // 2
 )
 fast_forward_button.scale = icon_scale
-
-# Variable to track if FPS input is active
-fps_input_active = False
-
-# Add this near the top with other global variables
-current_speed_state = "pause"  # Start paused
-
-# Update Constants section - add new indicator constants
-INDICATOR_BORDER_WIDTH = 2
-SELECTION_RING_SIZE = 4
-STATUS_RING_SIZE = 2
-INNER_CIRCLE_RATIO = 0.6  # Size of inner circle relative to main body
 
 class Creature:
     def __init__(self, x, y, environment, health=100, energy=100):
