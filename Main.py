@@ -7,7 +7,6 @@ import time
 WIDTH = 1200
 HEIGHT = 900
 GRID_SIZE = 50
-SIDEBAR_WIDTH = 280
 FPS = 0  # Initial FPS (paused)
 MIN_FPS = 1
 MAX_FPS = 60
@@ -19,8 +18,6 @@ SLEEPING_RADIUS = 4 * GRID_SIZE
 CONTROL_PANEL_HEIGHT = 60
 STATS_PANEL_HEIGHT = 220
 LEGEND_PANEL_HEIGHT = 520
-TOP_MARGIN = 15
-PANEL_SPACING = 15
 
 # Update Constants with refined sizes and spacing
 SIDEBAR_WIDTH = 280        # Slightly wider for better text display
@@ -1347,10 +1344,9 @@ Position: ({self.x}, {self.y})"""
         pattern_info = TEXTURE_PATTERNS[self.pattern]
         
         if self.pattern == "dots":
-            density = pattern_info["density"]
             dot_size = radius * 0.15 * self.pattern_scale
-            for i in range(density):
-                angle = (i / density * 2 * math.pi + self.pattern_offset) % (2 * math.pi)
+            for i in range(pattern_info["density"]):
+                angle = (i / pattern_info["density"] * 2 * math.pi + self.pattern_offset) % (2 * math.pi)
                 dist = radius * 0.6  # Keep dots within 60% of radius
                 x = center_x + math.cos(angle) * dist
                 y = center_y + math.sin(angle) * dist
@@ -1361,10 +1357,9 @@ Position: ({self.x}, {self.y})"""
                 ))
 
         elif self.pattern == "stripes":
-            density = pattern_info["density"]
             stripe_width = radius * 0.15 * self.pattern_scale
-            for i in range(density):
-                angle = (i / density * math.pi + self.pattern_offset) % math.pi
+            for i in range(pattern_info["density"]):
+                angle = (i / pattern_info["density"] * math.pi + self.pattern_offset) % math.pi
                 shapes.append(pyglet.shapes.Line(
                     center_x - radius * math.cos(angle),
                     center_y - radius * math.sin(angle),
@@ -1376,10 +1371,10 @@ Position: ({self.x}, {self.y})"""
                 ))
 
         elif self.pattern == "spots":
-            density = pattern_info["density"]
+
             spot_size = radius * 0.25 * self.pattern_scale
-            for i in range(density):
-                angle = (i / density * 2 * math.pi + self.pattern_offset) % (2 * math.pi)
+            for i in range(pattern_info["density"]):
+                angle = (i / pattern_info["density"] * 2 * math.pi + self.pattern_offset) % (2 * math.pi)
                 dist = radius * random.uniform(0.2, 0.7)  # Random distance from center
                 spot_x = center_x + math.cos(angle) * dist
                 spot_y = center_y + math.sin(angle) * dist
@@ -1765,15 +1760,6 @@ class Environment:
                     nearby.append(self.grid[(check_x, check_y)])
         return nearby
 
-    def update_spatial_grid(self):
-        """Update spatial partitioning grid"""
-        self.spatial_grid.clear()
-        for creature in self.creatures:
-            cell = (creature.x // self.cell_size, creature.y // self.cell_size)
-            if cell not in self.spatial_grid:
-                self.spatial_grid[cell] = []
-            self.spatial_grid[cell].append(creature)
-
     def get_area_center(self, area_type):
         """Get the center coordinates for different colony areas with fixed positions"""
         if area_type == "food":
@@ -1960,10 +1946,6 @@ class Environment:
         
         return False
 
-    def try_move_dead_creature(self, dead_creature):
-        """Remove this method or make it do nothing since dead creatures shouldn't move"""
-        return False
-
     def is_valid_position(self, x, y):
         """Check if a position is within bounds and not behind the sidebar"""
         return 0 <= x < self.width - (SIDEBAR_WIDTH // GRID_SIZE) and 0 <= y < self.height
@@ -1996,21 +1978,15 @@ class Environment:
     def update_area_scales(self):
         """Update the scales of the areas based on specific needs"""
         num_creatures = len(self.creatures)
-        num_dead = sum(1 for c in self.creatures if c.dead)
-        num_eggs = len(self.eggs)
+        if num_creatures == 0:
+            return
         
-        # Calculate scales based on different needs
-        sleeping_need = num_creatures
-        food_need = num_dead
-        nursery_need = num_eggs
+        max_scale = 1.5
+        scale_factor = 0.3
         
-        # Calculate base scales (more conservative maximum to prevent touching)
-        max_scale = 1.5  # Ensure zones do not touch
-        
-        # Base scale is 1.0, maximum scale prevents touching
-        self.sleeping_area_scale = min(max_scale, 1.0 + (sleeping_need / max(1, num_creatures)) * 0.3)
-        self.food_area_scale = min(max_scale, 1.0 + (food_need / max(1, num_creatures)) * 0.3)
-        self.nursery_area_scale = min(max_scale, 1.0 + (nursery_need / max(1, num_creatures)) * 0.3)
+        self.sleeping_area_scale = min(max_scale, 1.0 + scale_factor)
+        self.food_area_scale = min(max_scale, 1.0 + (sum(c.dead for c in self.creatures) / num_creatures) * scale_factor)
+        self.nursery_area_scale = min(max_scale, 1.0 + (len(self.eggs) / num_creatures) * scale_factor)
 
 # The egg class to handle egg incubation
 class Egg:
