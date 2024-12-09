@@ -15,7 +15,7 @@ NEST_CENTER_Y = HEIGHT // 2
 FOOD_STORAGE_RADIUS = 5 * GRID_SIZE
 NURSERY_RADIUS = 3 * GRID_SIZE
 SLEEPING_RADIUS = 4 * GRID_SIZE
-CONTROL_PANEL_HEIGHT = 90
+CONTROL_PANEL_HEIGHT = 60
 STATS_PANEL_HEIGHT = 220
 LEGEND_PANEL_HEIGHT = 520
 TOP_MARGIN = 15
@@ -27,9 +27,9 @@ TOP_MARGIN = 15           # Slightly larger margin
 PANEL_SPACING = 15        # Increased spacing between panels
 
 # Panel heights
-CONTROL_PANEL_HEIGHT = 90  # Reduced as it only contains FPS control
-STATS_PANEL_HEIGHT = 220  # Increased for stats content
-LEGEND_PANEL_HEIGHT = 520  # Increased for legend content
+CONTROL_PANEL_HEIGHT = 60  # Reduced from 90 to 60 to fit buttons more snugly
+STATS_PANEL_HEIGHT = 220   # Keep stats panel height
+LEGEND_PANEL_HEIGHT = 520  # Keep legend panel height
 
 # Legend specific constants
 LEGEND_ITEM_SPACING = 24   # Space between legend items
@@ -194,19 +194,16 @@ play_clicked_image = pyglet.resource.image('Assets/UI Icons/play-button-click.pn
 fast_forward_unclicked_image = pyglet.resource.image('Assets/UI Icons/fast-forward-button-unclick.png')
 fast_forward_clicked_image = pyglet.resource.image('Assets/UI Icons/fast-forward-button-click.png')
 
-# Create sprites for buttons with scaling
-icon_scale = 0.075  # Adjusted scale factor
+# Set scale factor
+icon_scale = 0.075
 
-# Calculate the y position to be below the "Controls" label
-buttons_y_position = HEIGHT - CONTROL_PANEL_HEIGHT + 20  # Reduced from 120 to 20 to move buttons higher
-
-# Create panels before anything else
+# Create panels
 control_panel = Panel(
     WIDTH - SIDEBAR_WIDTH - TOP_MARGIN,
     HEIGHT - TOP_MARGIN - CONTROL_PANEL_HEIGHT,
     SIDEBAR_WIDTH,
     CONTROL_PANEL_HEIGHT,
-    "Controls"
+    ""
 )
 
 stats_panel = Panel(
@@ -225,25 +222,36 @@ legend_panel = Panel(
     "Legend"
 )
 
-# THEN create the button sprites with pause initially clicked
+# Now create and position the buttons
+button_width = pause_unclicked_image.width * icon_scale  # Width of scaled button
+button_spacing = 20  # Space between buttons
+total_buttons_width = (button_width * 3) + (button_spacing * 2)  # Total width needed
+
+# Calculate starting x position to center the group of buttons within the control panel
+start_x = WIDTH - SIDEBAR_WIDTH + (SIDEBAR_WIDTH - total_buttons_width - 30) // 2
+
+# Calculate vertical center of the control panel
+vertical_center = HEIGHT - TOP_MARGIN - CONTROL_PANEL_HEIGHT//2
+
+# Create sprites for buttons with proper positioning
 pause_button = pyglet.sprite.Sprite(
-    pause_clicked_image,  # Start with clicked image
-    x=WIDTH - SIDEBAR_WIDTH + 15, 
-    y=control_panel.y + control_panel.height - 75
+    pause_clicked_image,
+    x=start_x,
+    y=vertical_center - (pause_clicked_image.height * icon_scale) // 2
 )
 pause_button.scale = icon_scale
 
 play_button = pyglet.sprite.Sprite(
-    play_unclicked_image, 
-    x=WIDTH - SIDEBAR_WIDTH + 75, 
-    y=control_panel.y + control_panel.height - 75
+    play_unclicked_image,
+    x=start_x + button_width + button_spacing,
+    y=vertical_center - (play_unclicked_image.height * icon_scale) // 2
 )
 play_button.scale = icon_scale
 
 fast_forward_button = pyglet.sprite.Sprite(
-    fast_forward_unclicked_image, 
-    x=WIDTH - SIDEBAR_WIDTH + 135, 
-    y=control_panel.y + control_panel.height - 75
+    fast_forward_unclicked_image,
+    x=start_x + (button_width + button_spacing) * 2,
+    y=vertical_center - (fast_forward_unclicked_image.height * icon_scale) // 2
 )
 fast_forward_button.scale = icon_scale
 
@@ -2226,6 +2234,19 @@ def update_stats():
             (255, 200, 0), "Progress", None
         )
 
+    else:
+        # Draw "Nothing selected" message centered in stats panel
+        pyglet.text.Label(
+            "Nothing selected",
+            font_name='Arial',
+            font_size=14,
+            x=stats_panel.x + stats_panel.width // 2,
+            y=stats_panel.y + stats_panel.height // 2,
+            anchor_x='center',
+            anchor_y='center',
+            color=(255, 255, 255, 255)  # White color
+        ).draw()
+
 def draw_stat_bar(x, y, width, value, max_value, color, label, batch, age_value=None):
     """Draw a single stat bar with label and optional age value"""
     # Draw label text
@@ -2364,31 +2385,39 @@ def update_ui_positions():
         STATS_PANEL_HEIGHT - PANEL_SPACING - LEGEND_PANEL_HEIGHT
     )
     
-    # Update buttons to be below the "Controls" label
-    pause_button.x = WIDTH - SIDEBAR_WIDTH + 15
-    pause_button.y = control_panel.y + control_panel.height - 75
-    
-    play_button.x = WIDTH - SIDEBAR_WIDTH + 75
-    play_button.y = control_panel.y + control_panel.height - 75
-    
-    fast_forward_button.x = WIDTH - SIDEBAR_WIDTH + 135
-    fast_forward_button.y = control_panel.y + control_panel.height - 75
+    # Remove the duplicate button positioning code since it's handled in the sprite creation
 
 @window.event
 def on_draw():
     window.clear()
     
-    # Draw panels background area
-    pyglet.shapes.Rectangle(
-        WIDTH - SIDEBAR_WIDTH - TOP_MARGIN, 0, 
-        SIDEBAR_WIDTH + TOP_MARGIN, HEIGHT,
-        color=(30, 30, 30)
-    ).draw()
+    # Draw environment first
+    env.draw(window)
     
     # Draw panels
     control_panel.draw()
     stats_panel.draw()
     legend_panel.draw()
+    
+    # Draw buttons with updated positions
+    if current_speed_state == "pause":
+        pause_button.draw()
+        play_button.image = play_unclicked_image
+        play_button.draw()
+        fast_forward_button.image = fast_forward_unclicked_image
+        fast_forward_button.draw()
+    elif current_speed_state == "play":
+        pause_button.image = pause_unclicked_image
+        pause_button.draw()
+        play_button.draw()
+        fast_forward_button.image = fast_forward_unclicked_image
+        fast_forward_button.draw()
+    else:  # fast forward
+        pause_button.image = pause_unclicked_image
+        pause_button.draw()
+        play_button.image = play_unclicked_image
+        play_button.draw()
+        fast_forward_button.draw()
     
     # Draw legend with adjusted starting position
     legend_start_y = legend_panel.y + legend_panel.height - LEGEND_TOP_PADDING
@@ -2486,11 +2515,6 @@ def on_draw():
         label.draw()
         
         y_offset -= LEGEND_ITEM_SPACING
-    
-    env.draw(window)
-    pause_button.draw()
-    play_button.draw()
-    fast_forward_button.draw()
     
     # Draw stats
     update_stats()
