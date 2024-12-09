@@ -1442,6 +1442,35 @@ class Environment:
                 return pos_x, pos_y
         return None
 
+    def update_spatial_grid(self):
+        """Update the spatial grid with current positions of all entities."""
+        self.spatial_grid.clear()
+        for creature in self.creatures:
+            cell_x, cell_y = self.get_cell(creature.x, creature.y)
+            if (cell_x, cell_y) not in self.spatial_grid:
+                self.spatial_grid[(cell_x, cell_y)] = []
+            self.spatial_grid[(cell_x, cell_y)].append(creature)
+        for egg in self.eggs:
+            cell_x, cell_y = self.get_cell(egg.x, egg.y)
+            if (cell_x, cell_y) not in self.spatial_grid:
+                self.spatial_grid[(cell_x, cell_y)] = []
+            self.spatial_grid[(cell_x, cell_y)].append(egg)
+
+    def get_cell(self, x, y):
+        """Get the cell coordinates for a given position."""
+        return x // self.cell_size, y // self.cell_size
+
+    def get_nearby_entities(self, x, y, radius=3):
+        """Get entities in nearby cells."""
+        nearby = []
+        cell_x, cell_y = self.get_cell(x, y)
+        for dx in range(-1, 2):
+            for dy in range(-1, 2):
+                cell = (cell_x + dx, cell_y + dy)
+                if cell in self.spatial_grid:
+                    nearby.extend(self.spatial_grid[cell])
+        return nearby
+
     def update(self, dt):
         """Update the environment, including moving creatures and handling interactions."""
         global selected_egg  # Add this line to modify the global variable
@@ -1490,6 +1519,8 @@ class Environment:
         # Remove creatures marked for removal
         self.creatures = [c for c in self.creatures if c not in self.creatures_to_remove]
         self.creatures_to_remove.clear()
+
+        self.update_spatial_grid()  # Update spatial grid at the start of each update
 
     def draw(self, screen):
         batch = pyglet.graphics.Batch()
@@ -1709,20 +1740,22 @@ class Environment:
         """Find the nearest dead creature with improved accessibility check"""
         food_sources = []
         
-        for creature in self.creatures:
-            if creature.dead and creature.food_value > 0:
+        # Use spatial partitioning to check nearby cells first
+        nearby_entities = self.get_nearby_entities(x, y, 5)  # Increased radius for food search
+        
+        for entity in nearby_entities:
+            if isinstance(entity, Creature) and entity.dead and entity.food_value > 0:
                 # Calculate base distance
-                distance = abs(x - creature.x) + abs(y - creature.y)
+                distance = abs(x - entity.x) + abs(y - entity.y)
                 
                 # Check if there's too many creatures already targeting this food
-                nearby_creatures = sum(1 for c in self.creatures 
-                                     if not c.dead and 
-                                     abs(c.x - creature.x) + abs(c.y - creature.y) <= 1)
+                nearby_creatures = sum(1 for c in self.get_nearby_entities(entity.x, entity.y)
+                                     if not c.dead)
                 
                 # Add penalty to distance based on nearby creatures
                 distance += nearby_creatures * 2
                 
-                food_sources.append((creature.x, creature.y, distance))
+                food_sources.append((entity.x, entity.y, distance))
         
         if food_sources:
             # Sort by adjusted distance and add small random factor to prevent perfect alignment
@@ -1738,27 +1771,8 @@ class Environment:
 
     def count_nearby_creatures(self, x, y):
         """Count number of creatures in adjacent cells"""
-        count = 0
-        for dx in [-1, 0, 1]:
-            for dy in [-1, 0, 1]:
-                check_x = x + dx
-                check_y = y + dy
-                if (check_x, check_y) in self.grid:
-                    entity = self.grid[(check_x, check_y)]
-                    if isinstance(entity, Creature) and not entity.dead:
-                        count += 1
-        return count
-
-    def get_nearby_entities(self, x, y, radius=3):
-        """Get entities in nearby cells"""
-        nearby = []
-        for dx in range(-radius, radius + 1):
-            for dy in range(-radius, radius + 1):
-                check_x = x + dx
-                check_y = y + dy
-                if (check_x, check_y) in self.grid:
-                    nearby.append(self.grid[(check_x, check_y)])
-        return nearby
+        return sum(1 for entity in self.get_nearby_entities(x, y)
+              if isinstance(entity, Creature) and not entity.dead)
 
     def get_area_center(self, area_type):
         """Get the center coordinates for different colony areas with fixed positions"""
