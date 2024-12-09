@@ -751,24 +751,28 @@ Position: ({self.x}, {self.y})"""
         return False
 
     def draw(self, batch):
-        shapes = []
+        # Calculate common animation values once
+        animation_sin = math.sin(self.animation_timer * 3)
+        continuous_angle = (self.animation_timer * HEART_ANIMATION_SPEED + self.heart_animation_offset) % (2 * math.pi)
+        
+        # Use these values instead of recalculating throughout the method
+        y_offset = animation_sin * 5  # For bobbing motion
+        opacity = int(180 + 75 * animation_sin)  # For opacity transitions
+        
+        # Calculate common values once at the start
         center_x = self.x * GRID_SIZE + GRID_SIZE // 2
         center_y = self.y * GRID_SIZE + GRID_SIZE // 2
         base_radius = GRID_SIZE // 2
+        current_radius = base_radius * (1.0 + math.sin(self.animation_timer * BREATH_SPEED * math.pi + self.breath_offset) * (DEAD_BREATH_AMOUNT if self.dead else BREATH_AMOUNT))
 
-        # Calculate breathing effect
-        breath_amount = DEAD_BREATH_AMOUNT if self.dead else BREATH_AMOUNT
-        # Use a smaller multiplier for the animation timer to slow down the breathing
-        breath_scale = 1.0 + math.sin(self.animation_timer * BREATH_SPEED * math.pi + self.breath_offset) * breath_amount
-
-        # Apply breathing to base_radius
-        current_radius = base_radius * breath_scale
-
-        # 1. Selection indicator (white ring, outermost)
+        # Use these cached values throughout the method instead of recalculating
+        shapes = []
+        
+        # Selection indicator
         if self.selected:
             shapes.append(pyglet.shapes.Circle(
                 center_x, center_y,
-                current_radius + SELECTION_RING_SIZE,  # Apply breathing to selection ring
+                current_radius + SELECTION_RING_SIZE,
                 color=(255, 255, 255, 180),
                 batch=batch
             ))
@@ -1794,7 +1798,8 @@ class Environment:
         py = y * GRID_SIZE + GRID_SIZE // 2
         
         center = self.get_area_center(area_type)
-        distance = ((px - center[0])**2 + (py - center[1])**2)**0.5
+        # Correct the distance calculation
+        distance = ((px - center[0])**2 + (py - center[1])**2) ** 0.5
         
         # Scale only affects the radius, not the center position
         if area_type == "food":
@@ -1841,40 +1846,39 @@ class Environment:
         return True
 
     def try_move_towards(self, entity, target_x, target_y):
-        """Try to move entity towards target, handling collisions and obstacles"""
         if entity.dead:
             return False
 
-        # Calculate movement towards target
+        # Calculate movement deltas once
         dx = target_x - entity.x
         dy = target_y - entity.y
+        
+        # Calculate absolute values once
+        abs_dx = abs(dx)
+        abs_dy = abs(dy)
         
         # If already at target, no need to move
         if dx == 0 and dy == 0:
             return True
 
-        # Get all possible moves, ordered by priority
-        possible_moves = []
+        # Get normalized directions once
+        dir_x = dx // abs_dx if dx != 0 else 0
+        dir_y = dy // abs_dy if dy != 0 else 0
         
-        # Direct moves (primary direction)
-        if abs(dx) > abs(dy):
-            # Prioritize horizontal movement
+        # Use these cached values throughout the method
+        possible_moves = []
+        if abs_dx > abs_dy:
             if dx != 0:
-                possible_moves.append((dx // abs(dx), 0))  # Horizontal
+                possible_moves.append((dir_x, 0))
                 if dy != 0:
-                    possible_moves.append((dx // abs(dx), dy // abs(dy)))  # Diagonal
-                    possible_moves.append((0, dy // abs(dy)))  # Vertical
-            else:
-                possible_moves.append((0, dy // abs(dy)))  # Vertical
+                    possible_moves.append((dir_x, dir_y))
+                    possible_moves.append((0, dir_y))
         else:
-            # Prioritize vertical movement
             if dy != 0:
-                possible_moves.append((0, dy // abs(dy)))  # Vertical
+                possible_moves.append((0, dir_y))
                 if dx != 0:
-                    possible_moves.append((dx // abs(dx), dy // abs(dy)))  # Diagonal
-                    possible_moves.append((dx // abs(dx), 0))  # Horizontal
-            else:
-                possible_moves.append((dx // abs(dx), 0))  # Horizontal
+                    possible_moves.append((dir_x, dir_y))
+                    possible_moves.append((dir_x, 0))
 
         # Add alternative moves for obstacle avoidance
         if dx != 0:
@@ -2216,14 +2220,14 @@ def update_stats():
     """Update the stats display with loading bars"""
     global selected_creature, selected_egg
     
+    # Calculate common panel values once
+    panel_center_x = stats_panel.x + (stats_panel.width / 2)
+    base_x = panel_center_x - (SIDEBAR_WIDTH - 30) / 2
+    base_y = stats_panel.y + stats_panel.height - 40
+    bar_width = SIDEBAR_WIDTH - 30
+    
+    # Use these cached values throughout the method
     if selected_creature:
-        # Calculate base positions using panel dimensions
-        panel_center_x = stats_panel.x + (stats_panel.width / 2)
-        base_x = panel_center_x - (SIDEBAR_WIDTH - 30) / 2
-        base_y = stats_panel.y + stats_panel.height - 40
-        bar_width = SIDEBAR_WIDTH - 30
-        
-        # Draw title (centered)
         pyglet.text.Label(
             "Creature Stats",
             font_name='Arial',
@@ -2796,6 +2800,19 @@ def on_draw():
     legend_start_y = legend_panel.y + legend_panel.height - LEGEND_TOP_PADDING
     y_offset = legend_start_y
     
+    # Pre-calculate common colors and alpha values
+    semi_transparent = 230
+    critical_color = (255, 0, 0, 200)
+    selection_color = (255, 255, 255, 180)
+    base_creature_color = (0, 255, 0)
+    
+    # Age indicator colors
+    age_colors = {
+        "young_adult": (0, 255, 0),
+        "middle_age": (255, 255, 0),
+        "elder": (255, 0, 0)
+    }
+    
     for label_text, color in legend_labels:
         if color == "header":
             # Add extra space before headers (except the first one)
@@ -2832,27 +2849,27 @@ def on_draw():
         elif color == "selected":
             # Selection indicator with creature inside
             pyglet.shapes.Circle(x_pos, y_offset, 
-                               LEGEND_ICON_SIZE//2 + 4, color=(255, 255, 255, 180)).draw()
+                               LEGEND_ICON_SIZE//2 + 4, color=selection_color).draw()
             pyglet.shapes.Circle(x_pos, y_offset, 
-                               LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
+                               LEGEND_ICON_SIZE//2, color=base_creature_color).draw()
             # Add inner circle to match actual creature appearance
             pyglet.shapes.Circle(x_pos, y_offset, 
                                LEGEND_ICON_SIZE//2 * INNER_CIRCLE_RATIO, 
-                               color=(0, 255, 0, 230)).draw()
+                               color=(0, 255, 0, semi_transparent)).draw()
         elif color == "critical":
             # Critical status indicator with creature inside
             pyglet.shapes.Circle(x_pos, y_offset, 
-                               LEGEND_ICON_SIZE//2 + 2, color=(255, 0, 0, 200)).draw()
+                               LEGEND_ICON_SIZE//2 + 2, color=critical_color).draw()
             pyglet.shapes.Circle(x_pos, y_offset, 
-                               LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
+                               LEGEND_ICON_SIZE//2, color=base_creature_color).draw()
             # Add inner circle to match actual creature appearance
             pyglet.shapes.Circle(x_pos, y_offset, 
                                LEGEND_ICON_SIZE//2 * INNER_CIRCLE_RATIO, 
-                               color=(0, 255, 0, 230)).draw()
+                               color=(0, 255, 0, semi_transparent)).draw()
         elif color in ["young_adult", "middle_age", "elder"]:
             # Age indicator examples with outer and inner circles
             pyglet.shapes.Circle(x_pos, y_offset, 
-                               LEGEND_ICON_SIZE//2, color=(0, 255, 0)).draw()
+                               LEGEND_ICON_SIZE//2, color=age_colors[color]).draw()
             # Different inner colors based on age
             if color == "young_adult":
                 inner_color = (0, 255, 0)
