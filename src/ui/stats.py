@@ -34,45 +34,45 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
         ).draw()
     
     if selected_creature:
-        # Health bar
-        draw_stat_bar(
-            base_x, base_y - STAT_BAR_HEIGHT - STAT_BAR_PADDING,
-            bar_width, selected_creature.health, 100,
-            STAT_BAR_COLORS['health'], "Health", None
-        )
-        
-        # Energy bar
-        draw_stat_bar(
-            base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 2,
-            bar_width, selected_creature.energy, 100,
-            STAT_BAR_COLORS['energy'], "Energy", None
-        )
-        
-        # Hunger bar
-        draw_stat_bar(
-            base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 3,
-            bar_width, selected_creature.hunger, 100,
-            STAT_BAR_COLORS['hunger'], "Hunger", None
-        )
-        
-        # Happiness bar
-        draw_stat_bar(
-            base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 4,
-            bar_width, selected_creature.happiness, 100,
-            STAT_BAR_COLORS['happiness'], "Happiness", None
-        )
-        
-        # Age bar
-        age_percentage = (selected_creature.age / selected_creature.max_age) * 100
-        draw_stat_bar(
-            base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 5,
-            bar_width, age_percentage, 100,
-            STAT_BAR_COLORS['age'], "Age", None,
-            age_value=selected_creature.age  # Pass the actual age value
-        )
-        
-        # Replace text status with icons
         if not selected_creature.dead:
+            # Health bar
+            draw_stat_bar(
+                base_x, base_y - STAT_BAR_HEIGHT - STAT_BAR_PADDING,
+                bar_width, selected_creature.health, 100,
+                STAT_BAR_COLORS['health'], "Health", None
+            )
+            
+            # Energy bar
+            draw_stat_bar(
+                base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 2,
+                bar_width, selected_creature.energy, 100,
+                STAT_BAR_COLORS['energy'], "Energy", None
+            )
+            
+            # Hunger bar
+            draw_stat_bar(
+                base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 3,
+                bar_width, selected_creature.hunger, 100,
+                STAT_BAR_COLORS['hunger'], "Hunger", None
+            )
+            
+            # Happiness bar
+            draw_stat_bar(
+                base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 4,
+                bar_width, selected_creature.happiness, 100,
+                STAT_BAR_COLORS['happiness'], "Happiness", None
+            )
+            
+            # Age bar
+            age_percentage = (selected_creature.age / selected_creature.max_age) * 100
+            draw_stat_bar(
+                base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 5,
+                bar_width, age_percentage, 100,
+                STAT_BAR_COLORS['age'], "Age", None,
+                age_value=selected_creature.age  # Pass the actual age value
+            )
+            
+            # Replace text status with icons
             # Calculate starting position for status icons
             icon_y = base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 7  # Lower the icons
             icon_spacing = ICON_SIZE * 1.5  # Space between icons

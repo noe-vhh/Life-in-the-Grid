@@ -122,9 +122,11 @@ class Environment:
             egg.update()
             if egg.ready_to_hatch:
                 # Unselect the egg if it is selected
-                if selected_egg == egg:
-                    selected_egg.selected = False
-                    selected_egg = None
+                if egg.selected:
+                    egg.selected = False
+                    # Update game manager's selected egg through environment
+                    if self.game_manager:
+                        self.game_manager.selected_egg = None
 
                 # Create new creature at egg's position
                 new_creature = Creature(egg.x, egg.y, self)
