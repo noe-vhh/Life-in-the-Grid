@@ -1,12 +1,3 @@
-## Technical Foundation
-- [ ] Split into multiple files
-  - Creatures
-  - UI
-  - Environment
-- [ ] Config file for constants
-- [ ] Basic optimization
-- [ ] Simple save system
-
 ## Documentation
 - [ ] GitHub readme
 - [ ] System documentation

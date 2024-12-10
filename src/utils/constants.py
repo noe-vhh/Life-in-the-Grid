@@ -6,6 +6,8 @@ MIN_FPS = 1
 MAX_FPS = 60
 fps_input_active = False
 current_speed_state = "pause"
+selected_creature = None
+selected_egg = None
 
 # Grid and Layout
 GRID_SIZE = 50
@@ -13,6 +15,7 @@ SIDEBAR_WIDTH = 280
 TOP_MARGIN = 15
 PANEL_SPACING = 15
 QUADRANT_OFFSET = 300
+icon_scale = 0.075
 
 # Nest Area Configuration
 NEST_CENTER_X = WIDTH // 4
@@ -109,3 +112,16 @@ STAT_BAR_COLORS = {
     'happiness': (255, 100, 255), # Pink
     'age': (100, 255, 100)       # Green
 }
+
+# Age indicator colors
+age_colors = {
+    "young_adult": (0, 255, 0),
+    "middle_age": (255, 255, 0),
+    "elder": (255, 0, 0)
+}
+    
+# Pre-calculate common colors and alpha values
+semi_transparent = 230
+critical_color = (255, 0, 0, 200)
+selection_color = (255, 255, 255, 180)
+base_creature_color = (0, 255, 0)
