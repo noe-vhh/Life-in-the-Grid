@@ -457,6 +457,20 @@ class Environment:
             if creature_shapes:
                 shapes.extend(creature_shapes)
 
+        # Draw tile selection if exists
+        if self.game_manager and self.game_manager.selected_tile:
+            x, y = self.game_manager.selected_tile
+            # Draw selection square
+            pyglet.shapes.BorderedRectangle(
+                x * GRID_SIZE,
+                y * GRID_SIZE,
+                GRID_SIZE,
+                GRID_SIZE,
+                border=2,
+                color=(40, 40, 40, 180),  # Semi-transparent fill with matching alpha
+                border_color=(255, 255, 255, 180)  # White border with alpha
+            ).draw()
+
         # Draw everything at once using the batch
         batch.draw()
 

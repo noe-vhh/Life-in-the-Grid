@@ -159,7 +159,8 @@ class UIManager:
         self.legend.draw()
 
     def draw_stats_content(self):
-        # Now we can access game_manager
         selected_creature = self.game_manager.selected_creature
         selected_egg = self.game_manager.selected_egg
-        update_stats(selected_creature, selected_egg, self.stats_panel, self.game_manager.environment)
+        selected_tile = self.game_manager.selected_tile
+        update_stats(selected_creature, selected_egg, selected_tile, 
+                    self.stats_panel, self.game_manager.environment)

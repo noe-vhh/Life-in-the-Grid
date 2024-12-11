@@ -10,6 +10,7 @@ class GameManager:
         self.FPS = 0
         self.selected_creature = None
         self.selected_egg = None
+        self.selected_tile = None
         self.environment = Environment((WIDTH - SIDEBAR_WIDTH) // GRID_SIZE, HEIGHT // GRID_SIZE, self)
         self.ui_manager = None
 
@@ -33,27 +34,31 @@ class GameManager:
         return False
 
     def _handle_grid_click(self, grid_x, grid_y):
+        """Handle clicks on the grid"""
         creature_found = False
         egg_found = False
-
+        
         # Check for creature click
         for creature in self.environment.creatures:
             if creature.x == grid_x and creature.y == grid_y:
                 self._select_creature(creature)
                 creature_found = True
+                self.selected_tile = None  # Clear tile selection
                 break
-
+        
         # Check for egg click
         if not creature_found:
             for egg in self.environment.eggs:
                 if egg.x == grid_x and egg.y == grid_y:
                     self._select_egg(egg)
                     egg_found = True
+                    self.selected_tile = None  # Clear tile selection
                     break
-
-        # Deselect if clicking empty space
+        
+        # If no creature or egg found, select the tile
         if not creature_found and not egg_found:
             self._deselect_all()
+            self.selected_tile = (grid_x, grid_y)
 
     def _select_creature(self, creature):
         if self.selected_creature != creature:
@@ -84,4 +89,5 @@ class GameManager:
             self.selected_creature = None
 
         if self.ui_manager:
-            update_stats(self.selected_creature, self.selected_egg, self.ui_manager.stats_panel, self.environment)
+            update_stats(self.selected_creature, self.selected_egg, self.selected_tile, 
+                        self.ui_manager.stats_panel, self.environment)

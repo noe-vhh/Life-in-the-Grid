@@ -10,7 +10,7 @@ def format_stats(creature):
     
     return str(creature)  # Use the creature's string representation
 
-def update_stats(selected_creature, selected_egg, stats_panel, env):
+def update_stats(selected_creature, selected_egg, selected_tile, stats_panel, env):
     """Update the stats display with loading bars"""
     # Calculate common panel values once
     panel_center_x = stats_panel.x + (stats_panel.width / 2)
@@ -432,7 +432,89 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
             anchor_y='center',
             color=(255, 255, 100, 255) if selected_egg.ready_to_hatch else (255, 255, 255, 255)
         ).draw()
+    elif selected_tile is not None:
+        # Draw "Tile Info" header
+        pyglet.text.Label(
+            "Tile Information",
+            font_name='Arial',
+            font_size=12,
+            bold=True,
+            x=panel_center_x,
+            y=stats_panel.y + stats_panel.height - 20,
+            anchor_x='center',
+            anchor_y='center',
+            color=(255, 255, 255, 255)
+        ).draw()
 
+        current_y = base_y - 30
+
+        # Track if we've displayed any stats
+        stats_displayed = False
+
+        # Check and display zone information first
+        zones = []
+        if env.is_in_area(selected_tile[0], selected_tile[1], "sleeping"):
+            zones.append(("Sleeping Area", (100, 100, 255)))
+        if env.is_in_area(selected_tile[0], selected_tile[1], "food"):
+            zones.append(("Food Storage", (200, 150, 50)))
+        if env.is_in_area(selected_tile[0], selected_tile[1], "nursery"):
+            zones.append(("Nursery", (255, 200, 0)))
+
+        # Display zone information if any
+        if zones:
+            for zone_name, zone_color in zones:
+                pyglet.text.Label(
+                    f"Zone: {zone_name}",
+                    font_name='Arial',
+                    font_size=10,
+                    x=panel_center_x,
+                    y=current_y,
+                    anchor_x='center',
+                    anchor_y='center',
+                    color=zone_color + (255,)  # Add alpha channel
+                ).draw()
+                current_y -= 20
+                stats_displayed = True
+            current_y -= 10  # Extra spacing after zones
+
+        # Grass level (only if > 0)
+        if (selected_tile[0], selected_tile[1]) in env.grass:
+            grass_value = env.grass[(selected_tile[0], selected_tile[1])]
+            if grass_value > 0:
+                draw_stat_bar(
+                    base_x, current_y,
+                    bar_width, grass_value, 100,
+                    (34, 139, 34), "Grass",  # Forest green color
+                    label_x=label_x
+                )
+                current_y -= (STAT_BAR_HEIGHT + STAT_BAR_PADDING)
+                stats_displayed = True
+
+        # Fertility level (only if > 0)
+        if (selected_tile[0], selected_tile[1]) in env.fertility:
+            fertility_value = env.fertility[(selected_tile[0], selected_tile[1])]
+            if fertility_value > 0:
+                draw_stat_bar(
+                    base_x, current_y,
+                    bar_width, fertility_value, MAX_FERTILITY,
+                    (139, 69, 19), "Fertility",  # Brown color
+                    label_x=label_x
+                )
+                current_y -= (STAT_BAR_HEIGHT + STAT_BAR_PADDING)
+                stats_displayed = True
+
+        # Position information
+        position_y = current_y - (20 if stats_displayed else 0)
+        pyglet.text.Label(
+            f"Position: ({selected_tile[0]}, {selected_tile[1]})",
+            font_name='Arial',
+            font_size=10,
+            x=panel_center_x,
+            y=position_y,
+            anchor_x='center',
+            anchor_y='center',
+            color=(255, 255, 255, 255)
+        ).draw()
     else:
         # Draw "Nothing selected" message centered in stats panel
         pyglet.text.Label(
