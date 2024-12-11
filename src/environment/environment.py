@@ -142,7 +142,6 @@ class Environment:
                 self.creatures.append(new_creature)
                 self.grid[(egg.x, egg.y)] = new_creature
                 # Remove the hatched egg
-                self.hatch_egg(egg)
                 self.eggs.remove(egg)
                 self.grid.pop((egg.x, egg.y), None)
         

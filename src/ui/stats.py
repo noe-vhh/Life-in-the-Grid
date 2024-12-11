@@ -16,7 +16,7 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
     panel_center_x = stats_panel.x + (stats_panel.width / 2)
     base_x = panel_center_x - (SIDEBAR_WIDTH - 30) / 2
     base_y = stats_panel.y + stats_panel.height - 40
-    bar_width = SIDEBAR_WIDTH - 30
+    bar_width = SIDEBAR_WIDTH - 100
     
     if selected_creature:
         if selected_creature.dead:
@@ -408,17 +408,17 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
             (255, 200, 0), "Incubation Progress"
         )
 
-        # Time remaining text
-        current_y -= (STAT_BAR_HEIGHT + STAT_BAR_PADDING + 20)
+        # Status
+        status = "Ready to hatch!" if selected_egg.ready_to_hatch else "Incubating..."
         pyglet.text.Label(
-            f"Time until hatching: {selected_egg.get_time_remaining()} seconds",
+            status,
             font_name='Arial',
             font_size=10,
-            x=base_x,
-            y=current_y,
-            anchor_x='left',
+            x=panel_center_x,
+            y=base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 2.5,
+            anchor_x='center',
             anchor_y='center',
-            color=(255, 255, 255, 255)
+            color=(255, 255, 100, 255) if selected_egg.ready_to_hatch else (255, 255, 255, 255)
         ).draw()
 
     else:
