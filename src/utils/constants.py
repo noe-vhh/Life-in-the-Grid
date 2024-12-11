@@ -131,7 +131,7 @@ base_creature_color = (0, 255, 0)
 # Decomposition and Growth Settings
 DECOMPOSITION_RATE = 0.1  # Rate at which creatures decompose
 MAX_DECOMPOSITION = 100
-MAX_FERTILIZER = 100
+MAX_FERTILITY = 100
 GRASS_GROWTH_RATE = 0.1
-FERTILIZER_SPREAD_RATE = 0.05
+FERTILITY_SPREAD_RATE = 0.05
 GRASS_SPREAD_CHANCE = 0.01

@@ -32,8 +32,8 @@ class Environment:
         self.sleeping_area_scale = 1.0
         self.food_area_scale = 1.0
         self.nursery_area_scale = 1.0
-        self.fertilizer = {}  # (x,y) -> fertilizer amount
-        self.grass = {}       # (x,y) -> grass amount
+        self.fertility = {} 
+        self.grass = {}      
         self.decomposing_positions = set()  # Add this line
         self.initial_death_positions = {}  # Add this to track where creatures first died
         self.last_positions = {}  # Add this to track last position
@@ -136,10 +136,10 @@ class Environment:
                     
                     # Add fertilizer only at current decomposing position
                     if current_pos in self.decomposing_positions:
-                        if current_pos not in self.fertilizer:
-                            self.fertilizer[current_pos] = 0
-                        self.fertilizer[current_pos] = min(MAX_FERTILIZER, 
-                            self.fertilizer[current_pos] + DECOMPOSITION_RATE)
+                        if current_pos not in self.fertility:
+                            self.fertility[current_pos] = 0
+                        self.fertility[current_pos] = min(MAX_FERTILITY, 
+                            self.fertility[current_pos] + DECOMPOSITION_RATE)
                 
                 # Only remove completely decomposed creatures
                 if hasattr(creature, 'decomposition') and creature.decomposition >= MAX_DECOMPOSITION:
@@ -181,8 +181,8 @@ class Environment:
                 self.eggs.remove(egg)
                 self.grid.pop((egg.x, egg.y), None)
         
-        # Update fertilizer spread and grass growth
-        new_fertilizer = self.fertilizer.copy()
+        # Update fertility spread and grass growth
+        new_fertility = self.fertility.copy()
         new_grass = self.grass.copy()
 
         # Define spread radius (how far grass can spread)
@@ -199,21 +199,21 @@ class Environment:
                     if not self.is_valid_position(x, y) or abs(dx) + abs(dy) > SPREAD_RADIUS:
                         continue
                     
-                    # Handle fertilizer spread
-                    if pos in self.fertilizer:
-                        amount = self.fertilizer[pos]
-                        spread_amount = amount * FERTILIZER_SPREAD_RATE
-                        if (x, y) not in new_fertilizer:
-                            new_fertilizer[(x, y)] = 0
-                        new_fertilizer[(x, y)] = min(MAX_FERTILIZER, 
-                            new_fertilizer[(x, y)] + spread_amount)
+                    # Handle fertility spread
+                    if pos in self.fertility:
+                        amount = self.fertility[pos]
+                        spread_amount = amount * FERTILITY_SPREAD_RATE
+                        if (x, y) not in new_fertility:
+                            new_fertility[(x, y)] = 0
+                        new_fertility[(x, y)] = min(MAX_FERTILITY, 
+                            new_fertility[(x, y)] + spread_amount)
                     
                     # Handle grass growth and spread
                     if (x, y) not in new_grass:
                         new_grass[(x, y)] = 0
                     
-                    # Faster growth on fertilizer
-                    if (x, y) in new_fertilizer and new_fertilizer[(x, y)] > 0:
+                    # Faster growth on fertility
+                    if (x, y) in new_fertility and new_fertility[(x, y)] > 0:
                         new_grass[(x, y)] = min(100, new_grass[(x, y)] + GRASS_GROWTH_RATE * 0.5)
                     else:
                         # Slower growth without fertilizer
@@ -238,8 +238,8 @@ class Environment:
                             
                             # Spread much less grass to neighbor
                             spread_amount = grass_amount * 0.01  # Only 1% of current grass
-                            if (new_x, new_y) in new_fertilizer:
-                                spread_amount *= 1.5  # 50% bonus on fertilizer
+                            if (new_x, new_y) in new_fertility:
+                                spread_amount *= 1.5  # 50% bonus on fertility
                             
                             new_grass[(new_x, new_y)] = min(100, new_grass[(new_x, new_y)] + spread_amount)
 
@@ -253,17 +253,17 @@ class Environment:
                     # Very slow growth away from fertilizer
                     new_grass[(x, y)] = min(100, new_grass[(x, y)] + GRASS_GROWTH_RATE * 0.05)
 
-        self.fertilizer = new_fertilizer
+        self.fertility = new_fertility
         self.grass = new_grass
 
     def draw(self, screen):
         batch = pyglet.graphics.Batch()
         shapes = []
 
-        # Layer 1: Draw fertilizer and grass with low opacity
-        for (x, y), fertilizer_amount in self.fertilizer.items():
-            if fertilizer_amount > 0:
-                alpha = int((fertilizer_amount / MAX_FERTILIZER) * 80)  # Very transparent
+        # Layer 1: Draw fertility and grass with low opacity
+        for (x, y), fertility_amount in self.fertility.items():
+            if fertility_amount > 0:
+                alpha = int((fertility_amount / MAX_FERTILITY) * 80)  # Very transparent
                 shapes.append(pyglet.shapes.Rectangle(
                     x * GRID_SIZE, y * GRID_SIZE,
                     GRID_SIZE, GRID_SIZE,
@@ -739,11 +739,11 @@ class Environment:
         self.food_area_scale = min(max_scale, 1.0 + (sum(c.dead for c in self.creatures) / num_creatures) * scale_factor)
         self.nursery_area_scale = min(max_scale, 1.0 + (len(self.eggs) / num_creatures) * scale_factor)
 
-    def add_fertilizer(self, x, y, amount):
-        """Add fertilizer to a position"""
-        if (x, y) not in self.fertilizer:
-            self.fertilizer[(x, y)] = 0
-        self.fertilizer[(x, y)] = min(MAX_FERTILIZER, self.fertilizer[(x, y)] + amount)
+    def add_fertility(self, x, y, amount):
+        """Add fertility to a position"""
+        if (x, y) not in self.fertility:
+            self.fertility[(x, y)] = 0
+        self.fertility[(x, y)] = min(MAX_FERTILITY, self.fertility[(x, y)] + amount)
 
     def hatch_egg(self, egg):
         """Handle egg hatching and create a new creature"""
