@@ -1,5 +1,6 @@
 import pyglet
 import math
+import time
 
 from utils.constants import *
 
@@ -421,7 +422,7 @@ def update_stats(selected_creature, selected_egg, selected_tile, stats_panel, en
         )
 
         # Status
-        status = "Ready to hatch!" if selected_egg.ready_to_hatch else "Incubating..."
+        status = "Ready to hatch!" if selected_egg.ready_to_hatch else "Incubating" + "." * (1 + int((time.time() * 2) % 3))
         pyglet.text.Label(
             status,
             font_name='Arial',
