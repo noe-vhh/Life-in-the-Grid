@@ -1,9 +1,7 @@
 deslect dead when removed
-grass + fertilizer
-decompostion bar
-grass + fertilizer behind area/zones
-delete when decompostion is done
-slow decompostion when dead
+stats panel layout - alive, egg, dead
+grass/fertility tooltip on select
+fertilizer spread when body move
 
 # Mid-Term Goals
 

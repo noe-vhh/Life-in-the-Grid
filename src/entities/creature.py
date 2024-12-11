@@ -197,18 +197,17 @@ class Creature:
                 self.target = None
                 self.color = (0, 255, 0)  # Reset color
 
-    def update(self):
+    def update(self, dt):
+        """Update the creature's state"""
+        # Skip update if dead
         if self.dead:
             return
 
-        # Always update animations based on real time, regardless of game speed
-        current_time = time.time()
-        elapsed_time = current_time - self.last_update_time
-        self.last_update_time = current_time
+        # Update animation timer
+        self.animation_timer += dt
 
-        # Update animations even when game is at 1 FPS
-        self.animation_timer += elapsed_time
-        self.accumulated_time += elapsed_time
+        # Update animation timer
+        self.animation_timer += dt
 
         # Update animation frame based on accumulated time
         if self.accumulated_time >= self.frame_update_interval:
@@ -446,10 +445,11 @@ class Creature:
 
     def die(self):
         """Mark the creature as dead instead of removing it."""
-        self.dead = True
-        self.color = (255, 0, 0)  # Red color for dead creatures
-        self.health = 0
-        self.food_value = 200  # Doubled from 100 to 200 - dead creatures provide more food
+        """Mark the creature as dead"""
+        if not self.dead:
+            self.dead = True
+            self.color = (255, 0, 0)  # Red color for dead creatures
+            self.health = 0
         
         # Determine cause of death
         if self.age >= self.max_age:
@@ -489,7 +489,7 @@ Status: {', '.join(status) if status else 'Active'}
 Position: ({self.x}, {self.y})"""
 
     def eat(self, food_source):
-        """Consume some food from a dead creature when adjacent to it"""
+        """Attempt to eat a food source"""
         if (not self.dead and food_source.dead and food_source.food_value > 0 and
             not self.sleeping and self.hunger < 100):
             # Check if we're adjacent to the food source
@@ -558,7 +558,7 @@ Position: ({self.x}, {self.y})"""
             
             # Food value indicator (arc) with updated color scheme
             if self.food_value > 0:
-                food_percentage = self.food_value / 200
+                food_percentage = self.food_value / 100
                 # Use a more muted green for the food indicator
                 shapes.append(pyglet.shapes.Arc(
                     center_x, center_y,
@@ -1153,3 +1153,12 @@ Position: ({self.x}, {self.y})"""
                 ))
 
         return shapes
+
+    def decompose(self, dt):
+        """Handle decomposition of dead creatures"""
+        if not hasattr(self, 'decomposition'):
+            self.decomposition = 0
+        
+        # Increase decomposition
+        self.decomposition = min(MAX_DECOMPOSITION, 
+                               self.decomposition + DECOMPOSITION_RATE)

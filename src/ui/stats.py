@@ -52,7 +52,7 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
             # Food value bar
             draw_stat_bar(
                 base_x, current_y,
-                bar_width, selected_creature.food_value, 200,
+                bar_width, selected_creature.food_value, 100,
                 STAT_BAR_COLORS['food'], "Food Value"
             )
             current_y -= (STAT_BAR_HEIGHT + STAT_BAR_PADDING + 10)

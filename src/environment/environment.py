@@ -34,6 +34,7 @@ class Environment:
         self.nursery_area_scale = 1.0
         self.fertilizer = {}  # (x,y) -> fertilizer amount
         self.grass = {}       # (x,y) -> grass amount
+        self.decomposing_positions = set()  # Add this line
         
     def is_position_occupied(self, x, y):
         """Check if a position is occupied by any entity"""
@@ -63,68 +64,57 @@ class Environment:
         return None
 
     def update_spatial_grid(self):
-        """Update the spatial grid with current positions of all entities."""
+        """Update the spatial partitioning grid"""
         self.spatial_grid.clear()
+        
+        # Add all creatures (both alive and dead) to the spatial grid
         for creature in self.creatures:
-            cell_x, cell_y = self.get_cell(creature.x, creature.y)
-            if (cell_x, cell_y) not in self.spatial_grid:
-                self.spatial_grid[(cell_x, cell_y)] = []
-            self.spatial_grid[(cell_x, cell_y)].append(creature)
-        for egg in self.eggs:
-            cell_x, cell_y = self.get_cell(egg.x, egg.y)
-            if (cell_x, cell_y) not in self.spatial_grid:
-                self.spatial_grid[(cell_x, cell_y)] = []
-            self.spatial_grid[(cell_x, cell_y)].append(egg)
+            cell_x = creature.x // self.cell_size
+            cell_y = creature.y // self.cell_size
+            cell_key = (cell_x, cell_y)
+            
+            if cell_key not in self.spatial_grid:
+                self.spatial_grid[cell_key] = []
+            self.spatial_grid[cell_key].append(creature)
 
     def get_cell(self, x, y):
         """Get the cell coordinates for a given position."""
         return x // self.cell_size, y // self.cell_size
 
     def get_nearby_entities(self, x, y, radius=3):
-        """Get entities in nearby cells."""
+        """Get all entities within a certain radius of a position"""
         nearby = []
-        cell_x, cell_y = self.get_cell(x, y)
-        for dx in range(-1, 2):
-            for dy in range(-1, 2):
-                cell = (cell_x + dx, cell_y + dy)
-                if cell in self.spatial_grid:
-                    nearby.extend(self.spatial_grid[cell])
+        
+        # Check all creatures in the environment
+        for creature in self.creatures:
+            dx = abs(creature.x - x)
+            dy = abs(creature.y - y)
+            if dx <= radius and dy <= radius:
+                if creature.dead:
+                    nearby.append(creature)
+        
         return nearby
 
     def update(self, dt):
-        """Update the environment, including moving creatures and handling interactions."""
-        global selected_egg  # Add this line to modify the global variable
-
-        self.update_area_scales()
-        
-        # Clear and rebuild grid at the start of update
-        self.grid.clear()
+        """Update the environment state"""
+        # Update creatures
         for creature in self.creatures:
-            self.grid[(creature.x, creature.y)] = creature
-        for egg in self.eggs:
-            self.grid[(egg.x, egg.y)] = egg
-        
-        # Update creatures and handle decomposition
-        decomposing_positions = []  # Track positions of decomposing creatures
-        for creature in self.creatures:
-            if not creature.dead:
-                old_x, old_y = creature.x, creature.y
-                creature.update()
-                
-                # Update grid if position changed
-                if (creature.x, creature.y) != (old_x, old_y):
-                    self.grid.pop((old_x, old_y), None)
-                    self.grid[(creature.x, creature.y)] = creature
-            else:
-                # Handle dead creature decomposition
-                if creature.decomposition < MAX_DECOMPOSITION:
-                    creature.decomposition += DECOMPOSITION_RATE
-                    # Add fertilizer as creature decomposes
-                    self.add_fertilizer(creature.x, creature.y, DECOMPOSITION_RATE * 0.5)
-                    decomposing_positions.append((creature.x, creature.y))
-                # Remove dead creatures with no food value and full decomposition
-                if creature.food_value <= 0 and creature.decomposition >= MAX_DECOMPOSITION:
+            if creature.dead:
+                # Add position to decomposing set
+                self.decomposing_positions.add((creature.x, creature.y))
+                # Don't remove dead creatures immediately
+                if hasattr(creature, 'decompose'):
+                    creature.decompose(dt)
+                    # Add fertilizer while decomposing
+                    if (creature.x, creature.y) not in self.fertilizer:
+                        self.fertilizer[(creature.x, creature.y)] = 0
+                    self.fertilizer[(creature.x, creature.y)] = min(MAX_FERTILIZER, 
+                        self.fertilizer[(creature.x, creature.y)] + DECOMPOSITION_RATE)
+                # Only remove completely decomposed creatures
+                if hasattr(creature, 'decomposition') and creature.decomposition >= MAX_DECOMPOSITION:
                     self.creatures_to_remove.append(creature)
+            else:
+                creature.update(dt)
         
         # Update eggs
         for egg in self.eggs[:]:  # Create a copy of the list to iterate over
@@ -145,11 +135,14 @@ class Environment:
                 self.eggs.remove(egg)
                 self.grid.pop((egg.x, egg.y), None)
         
-        # Remove dead creatures
+        # Remove fully decomposed creatures
         for creature in self.creatures_to_remove:
-            if creature in self.creatures:
+            if creature in self.creatures:  # Safety check
                 self.creatures.remove(creature)
-                self.grid.pop((creature.x, creature.y), None)
+                if (creature.x, creature.y) in self.grid:
+                    del self.grid[(creature.x, creature.y)]
+                # Remove from decomposing positions
+                self.decomposing_positions.discard((creature.x, creature.y))
         self.creatures_to_remove.clear()
         
         # Update fertilizer spread and grass growth only near decomposing bodies
@@ -160,7 +153,7 @@ class Environment:
         SPREAD_RADIUS = 2
         
         # Only process cells near decomposing creatures
-        for decomp_x, decomp_y in decomposing_positions:
+        for decomp_x, decomp_y in self.decomposing_positions:
             # Check cells within spread radius
             for dx in range(-SPREAD_RADIUS, SPREAD_RADIUS + 1):
                 for dy in range(-SPREAD_RADIUS, SPREAD_RADIUS + 1):
@@ -412,6 +405,7 @@ class Environment:
         
         for entity in nearby_entities:
             if isinstance(entity, Creature) and entity.dead and entity.food_value > 0:
+
                 # Calculate base distance
                 distance = abs(x - entity.x) + abs(y - entity.y)
                 
@@ -428,7 +422,7 @@ class Environment:
             # Sort by adjusted distance and add small random factor to prevent perfect alignment
             food_sources.sort(key=lambda x: x[2] + random.uniform(0, 0.5))
             return (food_sources[0][0], food_sources[0][1])
-            
+        
         return None
 
     def remove_dead_creature(self, creature):
@@ -509,6 +503,7 @@ class Environment:
         return True
 
     def try_move_towards(self, entity, target_x, target_y):
+        """Try to move an entity towards a target position"""
         if entity.dead:
             return False
 
@@ -527,7 +522,7 @@ class Environment:
         # Get normalized directions once
         dir_x = dx // abs_dx if dx != 0 else 0
         dir_y = dy // abs_dy if dy != 0 else 0
-        
+
         # Use these cached values throughout the method
         possible_moves = []
         if abs_dx > abs_dy:
