@@ -630,7 +630,7 @@ class Environment:
 
     def is_valid_position(self, x, y):
         """Check if a position is within bounds and not behind the sidebar"""
-        return 0 <= x < self.width - (SIDEBAR_WIDTH // GRID_SIZE) and 0 <= y < self.height
+        return 0 <= x < self.width and 0 <= y < self.height
 
     def find_valid_egg_spot(self, x, y):
         """Find a valid spot for an egg near the given position"""
