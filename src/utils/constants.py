@@ -110,7 +110,9 @@ STAT_BAR_COLORS = {
     'energy': (50, 150, 255),    # Blue
     'hunger': (255, 200, 50),    # Yellow
     'happiness': (255, 100, 255), # Pink
-    'age': (100, 255, 100)       # Green
+    'age': (100, 255, 100),      # Green
+    'decomposition': (139, 69, 19),  # Brown
+    'food': (255, 165, 0)        # Orange
 }
 
 # Age indicator colors
@@ -125,3 +127,11 @@ semi_transparent = 230
 critical_color = (255, 0, 0, 200)
 selection_color = (255, 255, 255, 180)
 base_creature_color = (0, 255, 0)
+
+# Decomposition and Growth Settings
+DECOMPOSITION_RATE = 0.2  # Rate at which creatures decompose
+MAX_DECOMPOSITION = 100
+MAX_FERTILIZER = 100
+GRASS_GROWTH_RATE = 0.1
+FERTILIZER_SPREAD_RATE = 0.05
+GRASS_SPREAD_CHANCE = 0.01

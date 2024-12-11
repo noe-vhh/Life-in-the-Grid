@@ -3,7 +3,7 @@ import math
 import pyglet
 import time
 
-from entitites.creature import Creature
+from entities.creature import Creature
 from utils.constants import *
 
 # The environment where creatures live
@@ -32,6 +32,8 @@ class Environment:
         self.sleeping_area_scale = 1.0
         self.food_area_scale = 1.0
         self.nursery_area_scale = 1.0
+        self.fertilizer = {}  # (x,y) -> fertilizer amount
+        self.grass = {}       # (x,y) -> grass amount
         
     def is_position_occupied(self, x, y):
         """Check if a position is occupied by any entity"""
@@ -102,23 +104,30 @@ class Environment:
         for egg in self.eggs:
             self.grid[(egg.x, egg.y)] = egg
         
-        # Update creatures
+        # Update creatures and handle decomposition
+        decomposing_positions = []  # Track positions of decomposing creatures
         for creature in self.creatures:
             if not creature.dead:
                 old_x, old_y = creature.x, creature.y
-                creature.update()  # This will now call move()
+                creature.update()
                 
                 # Update grid if position changed
                 if (creature.x, creature.y) != (old_x, old_y):
                     self.grid.pop((old_x, old_y), None)
                     self.grid[(creature.x, creature.y)] = creature
             else:
-                # Remove dead creatures with no food value
-                if creature.food_value <= 0:
+                # Handle dead creature decomposition
+                if creature.decomposition < MAX_DECOMPOSITION:
+                    creature.decomposition += DECOMPOSITION_RATE
+                    # Add fertilizer as creature decomposes
+                    self.add_fertilizer(creature.x, creature.y, DECOMPOSITION_RATE * 0.5)
+                    decomposing_positions.append((creature.x, creature.y))
+                # Remove dead creatures with no food value and full decomposition
+                if creature.food_value <= 0 and creature.decomposition >= MAX_DECOMPOSITION:
                     self.creatures_to_remove.append(creature)
         
         # Update eggs
-        for egg in self.eggs[:]:  # Create a copy of the list to safely modify it
+        for egg in self.eggs[:]:  # Create a copy of the list to iterate over
             egg.update()
             if egg.ready_to_hatch:
                 # Unselect the egg if it is selected
@@ -133,71 +142,86 @@ class Environment:
                 self.creatures.append(new_creature)
                 self.grid[(egg.x, egg.y)] = new_creature
                 # Remove the hatched egg
+                self.hatch_egg(egg)
                 self.eggs.remove(egg)
                 self.grid.pop((egg.x, egg.y), None)
         
-        # Remove creatures marked for removal
-        self.creatures = [c for c in self.creatures if c not in self.creatures_to_remove]
+        # Remove dead creatures
+        for creature in self.creatures_to_remove:
+            if creature in self.creatures:
+                self.creatures.remove(creature)
+                self.grid.pop((creature.x, creature.y), None)
         self.creatures_to_remove.clear()
-
-        self.update_spatial_grid()  # Update spatial grid at the start of each update
+        
+        # Update fertilizer spread and grass growth only near decomposing bodies
+        new_fertilizer = self.fertilizer.copy()
+        new_grass = self.grass.copy()
+        
+        # Define spread radius (how far fertilizer and grass can spread)
+        SPREAD_RADIUS = 2
+        
+        # Only process cells near decomposing creatures
+        for decomp_x, decomp_y in decomposing_positions:
+            # Check cells within spread radius
+            for dx in range(-SPREAD_RADIUS, SPREAD_RADIUS + 1):
+                for dy in range(-SPREAD_RADIUS, SPREAD_RADIUS + 1):
+                    x, y = decomp_x + dx, decomp_y + dy
+                    
+                    # Skip if position is invalid or too far (using Manhattan distance)
+                    if not self.is_valid_position(x, y) or abs(dx) + abs(dy) > SPREAD_RADIUS:
+                        continue
+                    
+                    # Handle fertilizer spread
+                    if (decomp_x, decomp_y) in self.fertilizer:
+                        amount = self.fertilizer[(decomp_x, decomp_y)]
+                        spread_amount = amount * FERTILIZER_SPREAD_RATE
+                        if (x, y) not in new_fertilizer:
+                            new_fertilizer[(x, y)] = 0
+                        new_fertilizer[(x, y)] = min(MAX_FERTILIZER, 
+                            new_fertilizer[(x, y)] + spread_amount)
+                    
+                    # Handle grass growth where there's fertilizer
+                    if (x, y) in new_fertilizer and new_fertilizer[(x, y)] > 0:
+                        if (x, y) not in new_grass:
+                            new_grass[(x, y)] = 0
+                        new_grass[(x, y)] = min(100, new_grass.get((x, y), 0) + GRASS_GROWTH_RATE)
+        
+        self.fertilizer = new_fertilizer
+        self.grass = new_grass
 
     def draw(self, screen):
         batch = pyglet.graphics.Batch()
         shapes = []
+
+        # Layer 1: Draw fertilizer and grass with low opacity
+        for (x, y), fertilizer_amount in self.fertilizer.items():
+            if fertilizer_amount > 0:
+                alpha = int((fertilizer_amount / MAX_FERTILIZER) * 80)  # Very transparent
+                shapes.append(pyglet.shapes.Rectangle(
+                    x * GRID_SIZE, y * GRID_SIZE,
+                    GRID_SIZE, GRID_SIZE,
+                    color=(139, 69, 19, alpha),
+                    batch=batch
+                ))
         
-        # Draw grid lines first (so they appear behind everything else)
-        # Vertical lines
-        for x in range(0, self.width + 1):
-            x_pos = x * GRID_SIZE
-            shapes.append(pyglet.shapes.Line(
-                x_pos, 0,
-                x_pos, self.height * GRID_SIZE,
-                color=(50, 50, 50, 100),  # Dark grey with some transparency
-                width=1,
-                batch=batch
-            ))
-        
-        # Horizontal lines
-        for y in range(0, self.height + 1):
-            y_pos = y * GRID_SIZE
-            shapes.append(pyglet.shapes.Line(
-                0, y_pos,
-                self.width * GRID_SIZE, y_pos,
-                color=(50, 50, 50, 100),  # Dark grey with some transparency
-                width=1,
-                batch=batch
-            ))
-        
-        # Draw thicker lines every 5 cells for better readability
-        for x in range(0, self.width + 1, 5):
-            x_pos = x * GRID_SIZE
-            shapes.append(pyglet.shapes.Line(
-                x_pos, 0,
-                x_pos, self.height * GRID_SIZE,
-                color=(70, 70, 70, 150),  # Slightly darker and more opaque
-                width=2,
-                batch=batch
-            ))
-        
-        for y in range(0, self.height + 1, 5):
-            y_pos = y * GRID_SIZE
-            shapes.append(pyglet.shapes.Line(
-                0, y_pos,
-                self.width * GRID_SIZE, y_pos,
-                color=(70, 70, 70, 150),  # Slightly darker and more opaque
-                width=2,
-                batch=batch
-            ))
-        
-        # Draw colony areas first with improved visuals
+        for (x, y), grass_amount in self.grass.items():
+            if grass_amount > 0:
+                alpha = int((grass_amount / 100) * 80)  # Very transparent
+                shapes.append(pyglet.shapes.Rectangle(
+                    x * GRID_SIZE, y * GRID_SIZE,
+                    GRID_SIZE, GRID_SIZE,
+                    color=(34, 139, 34, alpha),
+                    batch=batch
+                ))
+
+        # Layer 2: Draw colony areas
         areas = [
             ("food", FOOD_STORAGE_RADIUS * self.food_area_scale, (150, 80, 50), "Food Zone", 
-             [(200, 120, 70), (130, 60, 30)]),  # Gradient colors for food zone
+             [(200, 120, 70), (130, 60, 30)]),
             ("nursery", NURSERY_RADIUS * self.nursery_area_scale, (70, 150, 70), "Nursery Zone",
-             [(90, 170, 90), (50, 130, 50)]),   # Gradient colors for nursery
+             [(90, 170, 90), (50, 130, 50)]),
             ("sleeping", SLEEPING_RADIUS * self.sleeping_area_scale, (70, 70, 150), "Sleeping Zone",
-             [(90, 90, 170), (50, 50, 130)])    # Gradient colors for sleeping area
+             [(90, 90, 170), (50, 50, 130)])
         ]
 
         for area_type, radius, base_color, label, gradient_colors in areas:
@@ -336,16 +360,40 @@ class Environment:
                 color=(255, 255, 255, 230)
             ).draw()
 
-        # Draw eggs
+        # Layer 3: Draw grid lines
+        for x in range(0, self.width + 1):
+            x_pos = x * GRID_SIZE
+            shapes.append(pyglet.shapes.Line(
+                x_pos, 0,
+                x_pos, HEIGHT,
+                color=(50, 50, 50),
+                batch=batch
+            ))
+
+        for y in range(0, self.height + 1):
+            y_pos = y * GRID_SIZE
+            shapes.append(pyglet.shapes.Line(
+                0, y_pos,
+                WIDTH - SIDEBAR_WIDTH, y_pos,
+                color=(50, 50, 50),
+                batch=batch
+            ))
+
+        # Layer 4: Draw creatures and eggs
         for egg in self.eggs:
-            shapes.extend(egg.draw(batch))  # Ensure this line is calling the draw method
+            egg_shapes = egg.draw(batch)
+            if egg_shapes:
+                shapes.extend(egg_shapes)
 
-        # Draw creatures using their new draw method
         for creature in self.creatures:
-            shapes.extend(creature.draw(batch))
+            creature_shapes = creature.draw(batch)
+            if creature_shapes:
+                shapes.extend(creature_shapes)
 
-        # Draw everything in one call
+        # Draw everything at once using the batch
         batch.draw()
+
+        return shapes
 
     def is_position_blocked(self, x, y):
         """Check if a position is blocked by a living creature"""
@@ -621,3 +669,16 @@ class Environment:
         self.sleeping_area_scale = min(max_scale, 1.0 + scale_factor)
         self.food_area_scale = min(max_scale, 1.0 + (sum(c.dead for c in self.creatures) / num_creatures) * scale_factor)
         self.nursery_area_scale = min(max_scale, 1.0 + (len(self.eggs) / num_creatures) * scale_factor)
+
+    def add_fertilizer(self, x, y, amount):
+        """Add fertilizer to a position"""
+        if (x, y) not in self.fertilizer:
+            self.fertilizer[(x, y)] = 0
+        self.fertilizer[(x, y)] = min(MAX_FERTILIZER, self.fertilizer[(x, y)] + amount)
+
+    def hatch_egg(self, egg):
+        """Handle egg hatching and create a new creature"""
+        # Create a new creature at the egg's position
+        new_creature = Creature(egg.x, egg.y, self)
+        self.creatures.append(new_creature)
+        self.grid[(egg.x, egg.y)] = new_creature

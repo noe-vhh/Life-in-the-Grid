@@ -4,7 +4,7 @@ import math
 import time
 
 from utils.constants import *
-from entitites.egg import Egg
+from entities.egg import Egg
 
 class Creature:
     def __init__(self, x, y, environment, health=100, energy=100):
@@ -38,6 +38,8 @@ class Creature:
         self.egg = False
         self.has_laid_egg = False
         self.dragging_target = None  # Add this new attribute
+        self.decomposition = 0  # Add this line
+        self.death_cause = None  # Add this line
         
         # Animation properties
         self.animation_timer = 0

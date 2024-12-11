@@ -18,49 +18,92 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
     base_y = stats_panel.y + stats_panel.height - 40
     bar_width = SIDEBAR_WIDTH - 30
     
-    # Draw title
-    if selected_creature or selected_egg:
-        title = "Creature Stats" if selected_creature else "Egg Status"
-        pyglet.text.Label(
-            title,
-            font_name='Arial',
-            font_size=12,
-            bold=True,
-            x=panel_center_x,
-            y=stats_panel.y + stats_panel.height - 20,
-            anchor_x='center',
-            anchor_y='center',
-            color=(255, 255, 255, 255)
-        ).draw()
-    
     if selected_creature:
-        if not selected_creature.dead:
+        if selected_creature.dead:
+            # Title
+            pyglet.text.Label(
+                "Dead Creature Stats",
+                font_name='Arial',
+                font_size=12,
+                bold=True,
+                x=panel_center_x,
+                y=base_y,
+                anchor_x='center',
+                anchor_y='center',
+                color=(255, 255, 255, 255)
+            ).draw()
+
+            current_y = base_y - 30  # Start position for stats
+
+            # Death cause
+            pyglet.text.Label(
+                f"Cause of Death: {selected_creature.death_cause}",
+                font_name='Arial',
+                font_size=10,
+                x=base_x,
+                y=current_y,
+                anchor_x='left',
+                anchor_y='center',
+                color=(255, 255, 255, 255)
+            ).draw()
+            
+            current_y -= 30  # Space between text and first bar
+
+            # Food value bar
+            draw_stat_bar(
+                base_x, current_y,
+                bar_width, selected_creature.food_value, 200,
+                STAT_BAR_COLORS['food'], "Food Value"
+            )
+            current_y -= (STAT_BAR_HEIGHT + STAT_BAR_PADDING + 10)
+
+            # Decomposition bar
+            draw_stat_bar(
+                base_x, current_y,
+                bar_width, selected_creature.decomposition, MAX_DECOMPOSITION,
+                STAT_BAR_COLORS['decomposition'], "Decomposition"
+            )
+
+        else:
+            # Draw title
+            pyglet.text.Label(
+                "Creature Stats",
+                font_name='Arial',
+                font_size=12,
+                bold=True,
+                x=panel_center_x,
+                y=stats_panel.y + stats_panel.height - 20,
+                anchor_x='center',
+                anchor_y='center',
+                color=(255, 255, 255, 255)
+            ).draw()
+            
             # Health bar
             draw_stat_bar(
                 base_x, base_y - STAT_BAR_HEIGHT - STAT_BAR_PADDING,
                 bar_width, selected_creature.health, 100,
-                STAT_BAR_COLORS['health'], "Health", None
+                STAT_BAR_COLORS['health'], "Health"
             )
             
             # Energy bar
             draw_stat_bar(
                 base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 2,
                 bar_width, selected_creature.energy, 100,
-                STAT_BAR_COLORS['energy'], "Energy", None
+                STAT_BAR_COLORS['energy'], "Energy"
             )
             
             # Hunger bar
             draw_stat_bar(
                 base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 3,
                 bar_width, selected_creature.hunger, 100,
-                STAT_BAR_COLORS['hunger'], "Hunger", None
+                STAT_BAR_COLORS['hunger'], "Hunger"
             )
             
             # Happiness bar
             draw_stat_bar(
                 base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 4,
                 bar_width, selected_creature.happiness, 100,
-                STAT_BAR_COLORS['happiness'], "Happiness", None
+                STAT_BAR_COLORS['happiness'], "Happiness"
             )
             
             # Age bar
@@ -68,8 +111,8 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
             draw_stat_bar(
                 base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 5,
                 bar_width, age_percentage, 100,
-                STAT_BAR_COLORS['age'], "Age", None,
-                age_value=selected_creature.age  # Pass the actual age value
+                STAT_BAR_COLORS['age'], "Age",
+                age_value=selected_creature.age
             )
             
             # Replace text status with icons
@@ -342,67 +385,40 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
                     ).draw()
                 
                 current_x += icon_spacing
-        else:
-            # Dead creature stats (centered)
-            if selected_creature:  # Add null check
-                pyglet.text.Label(
-                    "DEAD CREATURE",
-                    font_name='Arial',
-                    font_size=12,
-                    bold=True,
-                    x=panel_center_x,
-                    y=base_y,
-                    anchor_x='center',
-                    anchor_y='top',
-                    color=(255, 100, 100, 255)
-                ).draw()
-                
-                # Draw cause of death (centered)
-                death_cause = getattr(selected_creature, 'death_cause', 'Unknown')  # Default to 'Unknown' if not set
-                pyglet.text.Label(
-                    f"Cause: {death_cause}",
-                    font_name='Arial',
-                    font_size=10,
-                    x=panel_center_x,
-                    y=base_y - 25,
-                    anchor_x='center',
-                    anchor_y='top',
-                    color=(255, 255, 255, 255)
-                ).draw()
-                
-                # Draw food bar (centered)
-                food_value = getattr(selected_creature, 'food_value', 0)  # Default to 0 if not set
-                draw_stat_bar(
-                    base_x,
-                    base_y - 65,
-                    bar_width,
-                    food_value/2,
-                    100,
-                    (150, 200, 50),
-                    "Food",
-                    None
-                )
-    
     elif selected_egg:
-        # Progress bar using egg's get_progress method
-        progress = selected_egg.get_progress()
-        draw_stat_bar(
-            base_x, base_y - STAT_BAR_HEIGHT - STAT_BAR_PADDING,
-            bar_width, progress, 100,
-            (255, 200, 0), "Progress", None
-        )
-
-        # Status
-        status = "Ready to hatch!" if selected_egg.ready_to_hatch else "Incubating..."
+        # Title
         pyglet.text.Label(
-            status,
+            "Egg Status",
             font_name='Arial',
-            font_size=10,
+            font_size=12,
+            bold=True,
             x=panel_center_x,
-            y=base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 2.5,
+            y=base_y,
             anchor_x='center',
             anchor_y='center',
-            color=(255, 255, 100, 255) if selected_egg.ready_to_hatch else (255, 255, 255, 255)
+            color=(255, 255, 255, 255)
+        ).draw()
+
+        current_y = base_y - 30
+
+        # Progress bar
+        draw_stat_bar(
+            base_x, current_y,
+            bar_width, selected_egg.get_progress(), 100,
+            (255, 200, 0), "Incubation Progress"
+        )
+
+        # Time remaining text
+        current_y -= (STAT_BAR_HEIGHT + STAT_BAR_PADDING + 20)
+        pyglet.text.Label(
+            f"Time until hatching: {selected_egg.get_time_remaining()} seconds",
+            font_name='Arial',
+            font_size=10,
+            x=base_x,
+            y=current_y,
+            anchor_x='left',
+            anchor_y='center',
+            color=(255, 255, 255, 255)
         ).draw()
 
     else:
@@ -418,66 +434,27 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
             color=(255, 255, 255, 255)  # White color
         ).draw()
 
-def draw_stat_bar(x, y, width, value, max_value, color, label, batch, age_value=None):
-    """Draw a single stat bar with label and optional age value"""
-    # Draw label text
+def draw_stat_bar(bar_x, y, bar_width, value, max_value, color, label, age_value=None, batch=None):
+    """Draw a stat bar with label and value"""
+    # Draw background (darker version of the bar color)
+    pyglet.shapes.Rectangle(
+        bar_x,
+        y,
+        bar_width,
+        STAT_BAR_HEIGHT,
+        color=(30, 30, 30)
+    ).draw()
+    
+    # Draw label
     pyglet.text.Label(
         label,
         font_name='Arial',
-        font_size=10,
-        x=x,
-        y=y + STAT_BAR_HEIGHT//2,
+        font_size=9,
+        x=bar_x,
+        y=y + STAT_BAR_HEIGHT + 5,
         anchor_x='left',
         anchor_y='center',
         color=(255, 255, 255, 255)
-    ).draw()
-    
-    # Calculate bar dimensions
-    bar_x = x + 70  # Offset for label
-    bar_width = width - 80  # Adjust width to account for label
-    
-    # Draw background (dark gray)
-    pyglet.shapes.Rectangle(
-        bar_x, y,
-        bar_width,
-        STAT_BAR_HEIGHT,
-        color=(50, 50, 50)
-    ).draw()
-    
-    # Draw border
-    border_color = (100, 100, 100)  # Light gray border
-    border_thickness = 2
-    
-    # Top border
-    pyglet.shapes.Line(
-        bar_x, y + STAT_BAR_HEIGHT,
-        bar_x + bar_width, y + STAT_BAR_HEIGHT,
-        border_thickness,
-        border_color
-    ).draw()
-    
-    # Bottom border
-    pyglet.shapes.Line(
-        bar_x, y,
-        bar_x + bar_width, y,
-        border_thickness,
-        border_color
-    ).draw()
-    
-    # Left border
-    pyglet.shapes.Line(
-        bar_x, y,
-        bar_x, y + STAT_BAR_HEIGHT,
-        border_thickness,
-        border_color
-    ).draw()
-    
-    # Right border
-    pyglet.shapes.Line(
-        bar_x + bar_width, y,
-        bar_x + bar_width, y + STAT_BAR_HEIGHT,
-        border_thickness,
-        border_color
     ).draw()
     
     # Draw progress bar
