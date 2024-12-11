@@ -10,20 +10,20 @@ class Egg:
         self.y = y
         self.env = environment
         self.timer = 0
-        self.hatch_time = 300  # Time until egg hatches
+        self.hatch_time = EGG_HATCH_TIME
         self.selected = False
         self.ready_to_hatch = False
 
     def update(self):
-        """Increment the egg's timer and check if ready to hatch."""
+        """Increment the egg's timer and check if ready to hatch"""
         if self.timer < self.hatch_time:
             self.timer += 1
         
         if self.timer >= self.hatch_time and not self.ready_to_hatch:
-            # Reset egg laying status for all nearby creatures
+            # Reset egg laying status for nearby parent creatures
             nearby_creatures = [
                 creature for creature in self.env.creatures
-                if abs(creature.x - self.x) + abs(creature.y - self.y) <= 3
+                if abs(creature.x - self.x) + abs(creature.y - self.y) <= EGG_NEARBY_PARENT_RANGE
                 and creature.has_laid_egg
             ]
             for creature in nearby_creatures:

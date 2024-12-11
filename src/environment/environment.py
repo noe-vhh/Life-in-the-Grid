@@ -99,50 +99,43 @@ class Environment:
 
     def update(self, dt):
         """Update the environment state"""
-        # Update creatures
+        # Update creatures and handle decomposition
         for creature in self.creatures:
             if creature.dead:
                 current_pos = (creature.x, creature.y)
                 
-                # Initialize tracking for newly dead creatures
+                # Track newly dead creatures
                 if creature not in self.initial_death_positions:
                     self.initial_death_positions[creature] = current_pos
                     self.last_positions[creature] = current_pos
                     self.decomposing_positions.add(current_pos)
                 
-                # Check if being moved
+                # Check if being moved by another creature
                 being_moved = any(
                     not c.dead and c.target == "food" and 
                     abs(c.x - creature.x) <= 1 and abs(c.y - creature.y) <= 1 
                     for c in self.creatures
                 )
                 
-                # Continue decomposition
-                if hasattr(creature, 'decompose'):
-                    creature.decompose(dt)
+                creature.decompose(dt)
                 
-                # Handle position changes and fertilizer
+                # Handle position changes and fertilizer spread
                 if not being_moved:
                     last_pos = self.last_positions[creature]
-                    
-                    # If position changed since last not-being-moved state
                     if current_pos != last_pos:
-                        # Remove old decomposing position
                         self.decomposing_positions.discard(last_pos)
-                        # Add new position
                         self.decomposing_positions.add(current_pos)
-                        # Update last position
                         self.last_positions[creature] = current_pos
                     
-                    # Add fertilizer only at current decomposing position
+                    # Add fertilizer at decomposition site
                     if current_pos in self.decomposing_positions:
                         if current_pos not in self.fertility:
                             self.fertility[current_pos] = 0
                         self.fertility[current_pos] = min(MAX_FERTILITY, 
                             self.fertility[current_pos] + DECOMPOSITION_RATE)
                 
-                # Only remove completely decomposed creatures
-                if hasattr(creature, 'decomposition') and creature.decomposition >= MAX_DECOMPOSITION:
+                # Remove fully decomposed creatures
+                if creature.decomposition >= MAX_DECOMPOSITION:
                     self.creatures_to_remove.append(creature)
             else:
                 creature.update(dt)
@@ -150,7 +143,6 @@ class Environment:
         # Remove fully decomposed creatures
         for creature in self.creatures_to_remove:
             if creature in self.creatures:
-                print(f"Removing fully decomposed creature at ({creature.x}, {creature.y})")
                 self.creatures.remove(creature)
                 if (creature.x, creature.y) in self.grid:
                     del self.grid[(creature.x, creature.y)]
@@ -718,7 +710,7 @@ class Environment:
     def find_valid_egg_spot(self, x, y):
         """Find a valid spot for an egg near the given position"""
         # Check immediate adjacent spots first
-        for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+        for dx, dy in CARDINAL_MOVES:
             new_x = x + dx
             new_y = y + dy
             if (self.is_valid_position(new_x, new_y) and
@@ -727,7 +719,7 @@ class Environment:
                 return new_x, new_y
             
         # If no immediate spots, check slightly further
-        for d in range(2, 4):
+        for d in range(2, EGG_SPOT_SEARCH_RANGE):
             for dx in range(-d, d+1):
                 for dy in range(-d, d+1):
                     if dx == 0 and dy == 0:
@@ -746,12 +738,9 @@ class Environment:
         if num_creatures == 0:
             return
         
-        max_scale = 1.5
-        scale_factor = 0.3
-        
-        self.sleeping_area_scale = min(max_scale, 1.0 + scale_factor)
-        self.food_area_scale = min(max_scale, 1.0 + (sum(c.dead for c in self.creatures) / num_creatures) * scale_factor)
-        self.nursery_area_scale = min(max_scale, 1.0 + (len(self.eggs) / num_creatures) * scale_factor)
+        self.sleeping_area_scale = min(MAX_AREA_SCALE, 1.0 + AREA_SCALE_FACTOR)
+        self.food_area_scale = min(MAX_AREA_SCALE, 1.0 + (sum(c.dead for c in self.creatures) / num_creatures) * AREA_SCALE_FACTOR)
+        self.nursery_area_scale = min(MAX_AREA_SCALE, 1.0 + (len(self.eggs) / num_creatures) * AREA_SCALE_FACTOR)
 
     def add_fertility(self, x, y, amount):
         """Add fertility to a position"""

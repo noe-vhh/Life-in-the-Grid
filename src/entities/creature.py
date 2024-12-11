@@ -269,6 +269,7 @@ class Creature:
                     self.color = (0, 255, 0)
                     self.move(self.env.width, self.env.height)
                 else:
+                    # Recover energy faster when well-fed
                     recovery_rate = 3 if self.hunger > 50 else 1
                     self.energy = min(100, self.energy + recovery_rate)
                     self.color = (100, 100, 255)
@@ -277,26 +278,20 @@ class Creature:
                         self.hunger <= 30 or
                         self.health < 50):
                         self.sleeping = False
-                        self.color = (0, 255, 0)
                         self.target = None
             
-            # Check for sleep need
+            # Check if creature needs sleep
             elif self.energy <= self.rest_threshold and self.hunger > 30:
                 self.sleeping = True
                 self.target = "sleeping"
-                self.color = (0, 255, 0)
                 self.move(self.env.width, self.env.height)
             
             # Normal behavior
             else:
-                if not self.carrying_food:
-                    self.color = (0, 255, 0)
-                
-                # Always try to move unless specifically sleeping in sleep area
+                # Always try to move unless sleeping in sleep area
                 if not (self.sleeping and self.env.is_in_area(self.x, self.y, "sleeping")):
                     self.move(self.env.width, self.env.height)
 
-                # Update egg laying cooldown
                 if self.egg_laying_cooldown > 0:
                     self.egg_laying_cooldown -= 1
 
@@ -444,14 +439,12 @@ class Creature:
                 self.has_laid_egg = True
 
     def die(self):
-        """Mark the creature as dead instead of removing it."""
-        """Mark the creature as dead"""
+        """Mark the creature as dead and determine cause of death"""
         if not self.dead:
             self.dead = True
             self.color = (255, 0, 0)  # Red color for dead creatures
             self.health = 0
         
-        # Determine cause of death
         if self.age >= self.max_age:
             self.death_cause = "Old Age"
         elif self.hunger <= 0:
