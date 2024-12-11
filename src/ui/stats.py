@@ -14,9 +14,13 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
     """Update the stats display with loading bars"""
     # Calculate common panel values once
     panel_center_x = stats_panel.x + (stats_panel.width / 2)
-    base_x = panel_center_x - (SIDEBAR_WIDTH - 30) / 2
+    # Tighten up the spacing
+    label_width = 50  # Width for labels
+    padding = 10  # Reduced padding
+    bar_width = stats_panel.width - (label_width + padding + 50)  # More space for bars
+    base_x = stats_panel.x + label_width + 40 # Reduced space after labels
+    label_x = stats_panel.x + padding + 60  # Keep labels at panel edge
     base_y = stats_panel.y + stats_panel.height - 40
-    bar_width = SIDEBAR_WIDTH - 100
     
     if selected_creature:
         if selected_creature.dead:
@@ -27,7 +31,7 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
                 font_size=12,
                 bold=True,
                 x=panel_center_x,
-                y=base_y,
+                y=base_y+20,
                 anchor_x='center',
                 anchor_y='center',
                 color=(255, 255, 255, 255)
@@ -53,15 +57,17 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
             draw_stat_bar(
                 base_x, current_y,
                 bar_width, selected_creature.food_value, 100,
-                STAT_BAR_COLORS['food'], "Food Value"
+                STAT_BAR_COLORS['food'], "Food Value",
+                label_x=label_x
             )
             current_y -= (STAT_BAR_HEIGHT + STAT_BAR_PADDING + 10)
 
             # Decomposition bar
             draw_stat_bar(
-                base_x, current_y,
-                bar_width, selected_creature.decomposition, MAX_DECOMPOSITION,
-                STAT_BAR_COLORS['decomposition'], "Decomposition"
+                base_x + 15, current_y,
+                bar_width - 15, selected_creature.decomposition, MAX_DECOMPOSITION,
+                STAT_BAR_COLORS['decomposition'], "Decomposition",
+                label_x=label_x + 20
             )
 
         else:
@@ -82,28 +88,32 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
             draw_stat_bar(
                 base_x, base_y - STAT_BAR_HEIGHT - STAT_BAR_PADDING,
                 bar_width, selected_creature.health, 100,
-                STAT_BAR_COLORS['health'], "Health"
+                STAT_BAR_COLORS['health'], "Health",
+                label_x=label_x
             )
             
             # Energy bar
             draw_stat_bar(
                 base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 2,
                 bar_width, selected_creature.energy, 100,
-                STAT_BAR_COLORS['energy'], "Energy"
+                STAT_BAR_COLORS['energy'], "Energy",
+                label_x=label_x
             )
             
             # Hunger bar
             draw_stat_bar(
                 base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 3,
                 bar_width, selected_creature.hunger, 100,
-                STAT_BAR_COLORS['hunger'], "Hunger"
+                STAT_BAR_COLORS['hunger'], "Hunger",
+                label_x=label_x
             )
             
             # Happiness bar
             draw_stat_bar(
                 base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 4,
                 bar_width, selected_creature.happiness, 100,
-                STAT_BAR_COLORS['happiness'], "Happiness"
+                STAT_BAR_COLORS['happiness'], "Happiness",
+                label_x=label_x
             )
             
             # Age bar
@@ -112,7 +122,8 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
                 base_x, base_y - (STAT_BAR_HEIGHT + STAT_BAR_PADDING) * 5,
                 bar_width, age_percentage, 100,
                 STAT_BAR_COLORS['age'], "Age",
-                age_value=selected_creature.age
+                age_value=selected_creature.age,
+                label_x=label_x
             )
             
             # Replace text status with icons
@@ -393,7 +404,7 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
             font_size=12,
             bold=True,
             x=panel_center_x,
-            y=base_y,
+            y=base_y + 20,
             anchor_x='center',
             anchor_y='center',
             color=(255, 255, 255, 255)
@@ -405,7 +416,8 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
         draw_stat_bar(
             base_x, current_y,
             bar_width, selected_egg.get_progress(), 100,
-            (255, 200, 0), "Incubation Progress"
+            (255, 200, 0), "Progress",
+            label_x=label_x
         )
 
         # Status
@@ -434,7 +446,7 @@ def update_stats(selected_creature, selected_egg, stats_panel, env):
             color=(255, 255, 255, 255)  # White color
         ).draw()
 
-def draw_stat_bar(bar_x, y, bar_width, value, max_value, color, label, age_value=None, batch=None):
+def draw_stat_bar(bar_x, y, bar_width, value, max_value, color, label, age_value=None, batch=None, label_x=None):
     """Draw a stat bar with label and value"""
     # Draw background (darker version of the bar color)
     pyglet.shapes.Rectangle(
@@ -445,14 +457,15 @@ def draw_stat_bar(bar_x, y, bar_width, value, max_value, color, label, age_value
         color=(30, 30, 30)
     ).draw()
     
-    # Draw label
+    # Draw label with the new label_x position
+    label_x = label_x or (bar_x - 5)  # Fallback to old position if label_x not provided
     pyglet.text.Label(
         label,
         font_name='Arial',
         font_size=9,
-        x=bar_x,
-        y=y + STAT_BAR_HEIGHT + 5,
-        anchor_x='left',
+        x=label_x,
+        y=y + STAT_BAR_HEIGHT//2,  # Center label vertically with bar
+        anchor_x='right',  # Right-align the label
         anchor_y='center',
         color=(255, 255, 255, 255)
     ).draw()
