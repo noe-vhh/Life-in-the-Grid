@@ -129,7 +129,7 @@ selection_color = (255, 255, 255, 180)
 base_creature_color = (0, 255, 0)
 
 # Decomposition and Growth Settings
-DECOMPOSITION_RATE = 0.2  # Rate at which creatures decompose
+DECOMPOSITION_RATE = 0.1  # Rate at which creatures decompose
 MAX_DECOMPOSITION = 100
 MAX_FERTILIZER = 100
 GRASS_GROWTH_RATE = 0.1

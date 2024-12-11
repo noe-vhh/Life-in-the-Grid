@@ -35,6 +35,8 @@ class Environment:
         self.fertilizer = {}  # (x,y) -> fertilizer amount
         self.grass = {}       # (x,y) -> grass amount
         self.decomposing_positions = set()  # Add this line
+        self.initial_death_positions = {}  # Add this to track where creatures first died
+        self.last_positions = {}  # Add this to track last position
         
     def is_position_occupied(self, x, y):
         """Check if a position is occupied by any entity"""
@@ -100,21 +102,65 @@ class Environment:
         # Update creatures
         for creature in self.creatures:
             if creature.dead:
-                # Add position to decomposing set
-                self.decomposing_positions.add((creature.x, creature.y))
-                # Don't remove dead creatures immediately
+                current_pos = (creature.x, creature.y)
+                
+                # Initialize tracking for newly dead creatures
+                if creature not in self.initial_death_positions:
+                    self.initial_death_positions[creature] = current_pos
+                    self.last_positions[creature] = current_pos
+                    self.decomposing_positions.add(current_pos)
+                
+                # Check if being moved
+                being_moved = any(
+                    not c.dead and c.target == "food" and 
+                    abs(c.x - creature.x) <= 1 and abs(c.y - creature.y) <= 1 
+                    for c in self.creatures
+                )
+                
+                # Continue decomposition
                 if hasattr(creature, 'decompose'):
                     creature.decompose(dt)
-                    # Add fertilizer while decomposing
-                    if (creature.x, creature.y) not in self.fertilizer:
-                        self.fertilizer[(creature.x, creature.y)] = 0
-                    self.fertilizer[(creature.x, creature.y)] = min(MAX_FERTILIZER, 
-                        self.fertilizer[(creature.x, creature.y)] + DECOMPOSITION_RATE)
+                
+                # Handle position changes and fertilizer
+                if not being_moved:
+                    last_pos = self.last_positions[creature]
+                    
+                    # If position changed since last not-being-moved state
+                    if current_pos != last_pos:
+                        # Remove old decomposing position
+                        self.decomposing_positions.discard(last_pos)
+                        # Add new position
+                        self.decomposing_positions.add(current_pos)
+                        # Update last position
+                        self.last_positions[creature] = current_pos
+                    
+                    # Add fertilizer only at current decomposing position
+                    if current_pos in self.decomposing_positions:
+                        if current_pos not in self.fertilizer:
+                            self.fertilizer[current_pos] = 0
+                        self.fertilizer[current_pos] = min(MAX_FERTILIZER, 
+                            self.fertilizer[current_pos] + DECOMPOSITION_RATE)
+                
                 # Only remove completely decomposed creatures
                 if hasattr(creature, 'decomposition') and creature.decomposition >= MAX_DECOMPOSITION:
                     self.creatures_to_remove.append(creature)
             else:
                 creature.update(dt)
+        
+        # Remove fully decomposed creatures
+        for creature in self.creatures_to_remove:
+            if creature in self.creatures:
+                print(f"Removing fully decomposed creature at ({creature.x}, {creature.y})")
+                self.creatures.remove(creature)
+                if (creature.x, creature.y) in self.grid:
+                    del self.grid[(creature.x, creature.y)]
+                # Clean up all tracking for this creature
+                self.decomposing_positions.discard((creature.x, creature.y))
+                if creature in self.initial_death_positions:
+                    del self.initial_death_positions[creature]
+                if creature in self.last_positions:
+                    del self.last_positions[creature]
+        self.creatures_to_remove.clear()
         
         # Update eggs
         for egg in self.eggs[:]:  # Create a copy of the list to iterate over
@@ -135,49 +181,78 @@ class Environment:
                 self.eggs.remove(egg)
                 self.grid.pop((egg.x, egg.y), None)
         
-        # Remove fully decomposed creatures
-        for creature in self.creatures_to_remove:
-            if creature in self.creatures:  # Safety check
-                self.creatures.remove(creature)
-                if (creature.x, creature.y) in self.grid:
-                    del self.grid[(creature.x, creature.y)]
-                # Remove from decomposing positions
-                self.decomposing_positions.discard((creature.x, creature.y))
-        self.creatures_to_remove.clear()
-        
-        # Update fertilizer spread and grass growth only near decomposing bodies
+        # Update fertilizer spread and grass growth
         new_fertilizer = self.fertilizer.copy()
         new_grass = self.grass.copy()
-        
-        # Define spread radius (how far fertilizer and grass can spread)
+
+        # Define spread radius (how far grass can spread)
         SPREAD_RADIUS = 2
-        
-        # Only process cells near decomposing creatures
-        for decomp_x, decomp_y in self.decomposing_positions:
+
+        # Process grass growth and spread near decomposing creatures
+        for pos in self.decomposing_positions:
             # Check cells within spread radius
             for dx in range(-SPREAD_RADIUS, SPREAD_RADIUS + 1):
                 for dy in range(-SPREAD_RADIUS, SPREAD_RADIUS + 1):
-                    x, y = decomp_x + dx, decomp_y + dy
+                    x, y = pos[0] + dx, pos[1] + dy
                     
                     # Skip if position is invalid or too far (using Manhattan distance)
                     if not self.is_valid_position(x, y) or abs(dx) + abs(dy) > SPREAD_RADIUS:
                         continue
                     
                     # Handle fertilizer spread
-                    if (decomp_x, decomp_y) in self.fertilizer:
-                        amount = self.fertilizer[(decomp_x, decomp_y)]
+                    if pos in self.fertilizer:
+                        amount = self.fertilizer[pos]
                         spread_amount = amount * FERTILIZER_SPREAD_RATE
                         if (x, y) not in new_fertilizer:
                             new_fertilizer[(x, y)] = 0
                         new_fertilizer[(x, y)] = min(MAX_FERTILIZER, 
                             new_fertilizer[(x, y)] + spread_amount)
                     
-                    # Handle grass growth where there's fertilizer
+                    # Handle grass growth and spread
+                    if (x, y) not in new_grass:
+                        new_grass[(x, y)] = 0
+                    
+                    # Faster growth on fertilizer
                     if (x, y) in new_fertilizer and new_fertilizer[(x, y)] > 0:
-                        if (x, y) not in new_grass:
-                            new_grass[(x, y)] = 0
-                        new_grass[(x, y)] = min(100, new_grass.get((x, y), 0) + GRASS_GROWTH_RATE)
-        
+                        new_grass[(x, y)] = min(100, new_grass[(x, y)] + GRASS_GROWTH_RATE * 0.5)
+                    else:
+                        # Slower growth without fertilizer
+                        new_grass[(x, y)] = min(100, new_grass[(x, y)] + GRASS_GROWTH_RATE * 0.1)
+
+        # Spread grass to neighboring cells (much slower)
+        if random.random() < 0.1:  # Only attempt spread 10% of the time
+            grass_positions = list(self.grass.keys())
+            for pos in grass_positions:
+                x, y = pos
+                grass_amount = self.grass[pos]
+                
+                # Only spread if grass amount is high enough
+                if grass_amount > 50:  # Increased threshold for spreading
+                    # Check adjacent cells
+                    for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+                        new_x, new_y = x + dx, y + dy
+                        
+                        if self.is_valid_position(new_x, new_y):
+                            if (new_x, new_y) not in new_grass:
+                                new_grass[(new_x, new_y)] = 0
+                            
+                            # Spread much less grass to neighbor
+                            spread_amount = grass_amount * 0.01  # Only 1% of current grass
+                            if (new_x, new_y) in new_fertilizer:
+                                spread_amount *= 1.5  # 50% bonus on fertilizer
+                            
+                            new_grass[(new_x, new_y)] = min(100, new_grass[(new_x, new_y)] + spread_amount)
+
+        # Update grass in other areas (extremely slow growth)
+        for x in range(self.width):
+            for y in range(self.height):
+                if (x, y) not in new_grass:
+                    new_grass[(x, y)] = 0
+                # Only grow if some grass is already present
+                if new_grass[(x, y)] > 0:
+                    # Very slow growth away from fertilizer
+                    new_grass[(x, y)] = min(100, new_grass[(x, y)] + GRASS_GROWTH_RATE * 0.05)
+
         self.fertilizer = new_fertilizer
         self.grass = new_grass
 

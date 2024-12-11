@@ -76,6 +76,12 @@ class GameManager:
             self.selected_egg = None
 
     def update(self, dt):
+        """Update game state"""
         self.environment.update(dt)
+        
+        # Deselect if selected creature was removed
+        if self.selected_creature and self.selected_creature not in self.environment.creatures:
+            self.selected_creature = None
+
         if self.ui_manager:
             update_stats(self.selected_creature, self.selected_egg, self.ui_manager.stats_panel, self.environment)
