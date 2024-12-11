@@ -283,11 +283,11 @@ class Environment:
 
         # Layer 2: Draw colony areas
         areas = [
-            ("food", FOOD_STORAGE_RADIUS * self.food_area_scale, (150, 80, 50), "Food Zone", 
+            ("food", FOOD_STORAGE_RADIUS * self.food_area_scale, (150, 80, 50), "Cemetery", 
              [(200, 120, 70), (130, 60, 30)]),
-            ("nursery", NURSERY_RADIUS * self.nursery_area_scale, (70, 150, 70), "Nursery Zone",
+            ("nursery", NURSERY_RADIUS * self.nursery_area_scale, (70, 150, 70), "Nest",
              [(90, 170, 90), (50, 130, 50)]),
-            ("sleeping", SLEEPING_RADIUS * self.sleeping_area_scale, (70, 70, 150), "Sleeping Zone",
+            ("sleeping", SLEEPING_RADIUS * self.sleeping_area_scale, (70, 70, 150), "Burrow",
              [(90, 90, 170), (50, 50, 130)])
         ]
 
