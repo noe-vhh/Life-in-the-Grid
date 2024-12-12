@@ -1,28 +1,23 @@
-# Mid-Term Goals
+# Todo
 
-## Colony Management
-- [ ] Basic resource system
-- [ ] Territory expansion
-- [ ] Simple roles system
+- [ ] Grid size adjustments
+- [ ] Drag to pan
+- [ ] Zooming
+
+# Mid-Term Goals
 
 ## Environment
 - [ ] Basic terrain types
 - [ ] Simple day/night cycle
 - [ ] Basic plant growth
 
+## Colony Management
+- [ ] Basic resource system
+
 # Long-Term Enhancements
 
 ## Advanced Features
 - [ ] Weather system
-- [ ] Complex AI behaviors
-- [ ] Advanced particle effects
-- [ ] Detailed statistics
-
-## Performance
-- [ ] Batch rendering
-- [ ] Advanced pathfinding
-- [ ] Multi-threading support
-- [ ] LOD system
 
 # Future Evolution (Last Priority)
 
@@ -33,72 +28,6 @@
   - Visual distinctions
   
 - [ ] Blood Feeding Mechanics
-  - Blood storage/levels
+  - Blood levels
   - Feeding system
   - Regeneration mechanics
-  
-- [ ] Decomposition System
-  - Decomposition stages
-  - Fertility mechanics
-  - Plant growth
-  
-- [ ] Protection Mechanics
-  - Host grouping
-  - Predator system
-  - Guard behavior
-
-## Advanced Colony Features
-- [ ] Complex role specialization
-- [ ] Advanced territory management
-- [ ] Inter-colony interactions
-
-# Concept Documentation
-
-## Parasitic/Symbiotic System Overview
-
-### Core Concept
-The system reimagines the creature relationships as a complex symbiotic partnership between two species: parasitic protectors and host creatures. This creates a more nuanced ecosystem where both species depend on each other for survival.
-
-### Species Roles
-
-#### Parasitic Protectors (Main Creatures)
-- Feed on the blood of host creatures
-- Protect hosts from predators
-- Manage and guard territory
-- Store and process their dead for fertility
-- Slower reproduction, longer lifespan
-- More intelligent, capable of complex behaviors
-
-#### Host Creatures
-- Provide blood sustenance to parasites
-- Graze on plants from fertile ground
-- More vulnerable to predators
-- Faster reproduction rate
-- Rely on parasites for protection
-- Simpler behavior patterns
-
-### Ecological Cycle
-1. Dead creatures decompose in designated areas
-2. Decomposition creates fertile ground
-3. Plants grow in fertile areas
-4. Host creatures eat plants
-5. Parasites feed on host blood
-6. Both species protect each other
-
-### Gameplay Dynamics
-- Players manage both species' populations
-- Balance protection vs feeding needs
-- Maintain territory and resources
-- Handle predator threats
-- Manage decomposition areas
-- Ensure sustainable blood feeding
-
-### Unique Features
-- Complex interdependent relationships
-- Natural resource cycle
-- Territory management
-- Protection mechanics
-- Multiple species management
-- Environmental impact system
-
-This system creates a more complex and interconnected ecosystem, where success depends on maintaining balance between different species and managing resources effectively.
